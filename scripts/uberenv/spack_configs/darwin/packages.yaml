@@ -1,0 +1,31 @@
+packages:
+  all:
+    target: [default]
+    compiler: [gcc]
+    providers:
+      mpi: [openmpi]
+      fftw-api@3: [intel-oneapi-mkl]
+
+  openmpi:
+    buildable: False
+    externals:
+      - spec: openmpi@4.1.4 %gcc@12.1.0
+        prefix: /Users/corbett5/workspace/spack/opt/spack/darwin-bigsur-skylake/gcc-12.1.0/openmpi-4.1.4-kqcje24lxtnexghaux6sicgkfmvrxbfs
+
+  intel-oneapi-mkl:
+    buildable: False
+    externals:
+      - spec: intel-oneapi-mkl@2022.1.0
+        prefix: /opt/intel/oneapi/mkl/2022.1.0/
+
+  cmake:
+    buildable: False
+    externals:
+    - spec: cmake@3.14.5
+      prefix: /Users/corbett5/workspace/spack/opt/spack/darwin-bigsur-skylake/apple-clang-12.0.0/cmake-3.14.5-6g4ohwbp3hxkplpnn44wld7wlhyoypw3
+
+  python:
+    buildable: False
+    externals:
+    - spec: python@3.8.0
+      prefix: /opt/anaconda3/

@@ -1,0 +1,6 @@
+[submodule "LvArray"]
+	path = LvArray
+	url = git@github.com:GEOSX/LvArray.git
+[submodule "qmc"]
+	path = qmc
+	url = git@github.com:mppmu/qmc.git

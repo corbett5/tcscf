@@ -1,0 +1,11 @@
+{
+  "package_name" : "tcscf",
+  "package_version" : "develop",
+  "package_final_phase" : "hostconfig",
+  "package_source_dir" : "../..",
+  "spack_url": "https://github.com/corbett5/spack",
+  "spack_branch": "corbett/tc02350",
+  "spack_activate" : {},
+  "spack_clean_packages": ["tcscf"],
+  "build_jobs": 100
+}

@@ -1,0 +1,7 @@
+/build*
+/install*
+*.*~*
+.vscode
+uberenv_libs
+spack-*.txt
+*__pycache__

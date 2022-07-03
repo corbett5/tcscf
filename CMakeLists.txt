@@ -32,6 +32,55 @@ include( LvArray/cmake/blt/SetupBLT.cmake )
 include( LvArray/cmake/CMakeBasics.cmake )
 
 ################################
+# BLAS/LAPACK
+################################
+
+include(cmake/FindMathLibraries.cmake)
+
+blt_import_library(NAME blas
+                   TREAT_INCLUDES_AS_SYSTEM ON
+                   LIBRARIES ${BLAS_LIBRARIES})
+
+blt_import_library(NAME lapack
+                   DEPENDS_ON blas
+                   TREAT_INCLUDES_AS_SYSTEM ON
+                   LIBRARIES ${LAPACK_LIBRARIES})
+
+################################
+# Adiak
+################################
+message( STATUS "Using Adiak from ${ADIAK_DIR}" )
+
+find_package( adiak REQUIRED
+              PATHS ${ADIAK_DIR}
+              NO_DEFAULT_PATH )
+
+set_property( TARGET adiak
+              APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES
+              ${adiak_INCLUDE_DIRS} )
+
+################################
+# Boost
+################################
+message( STATUS "Using boost from ${BOOST_DIR}" )
+
+blt_import_library( NAME boost
+                    # LIBRARIES [lib1 [lib2 ...]]
+                    INCLUDES ${BOOST_DIR}/include
+                    TREAT_INCLUDES_AS_SYSTEM ON )
+
+################################
+# GSL
+################################
+message( STATUS "Using GSL from ${GSL_DIR}" )
+
+# TODO fix this so that we export GSL_LIBS as well.
+blt_import_library( NAME gsl
+                    LIBRARIES ${GSL_DIR}/lib/libgsl.dylib
+                    INCLUDES ${GSL_DIR}/include
+                    TREAT_INCLUDES_AS_SYSTEM ON )
+
+################################
 # RAJA, CHAI, Umpire and Caliper
 ################################
 include( LvArray/cmake/SetupTPL.cmake )

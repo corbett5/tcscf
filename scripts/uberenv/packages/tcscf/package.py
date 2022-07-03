@@ -51,6 +51,16 @@ class Tcscf(CMakePackage, CudaPackage):
     depends_on('camp build_type=Release')
     depends_on('camp +cuda', when='+cuda')
 
+    #
+    # Virtual packages
+    #
+    depends_on('blas')
+    depends_on('lapack')
+
+    depends_on('boost')
+
+    depends_on('gsl')
+
     depends_on('raja@0.14.0 ~examples ~exercises build_type=Release')
 
     # At the moment Umpire doesn't support shared when building with CUDA.
@@ -58,9 +68,9 @@ class Tcscf(CMakePackage, CudaPackage):
 
     depends_on('chai +raja +openmp ~examples build_type=Release')
 
-    depends_on('adiak +mpi build_type=Release')
+    depends_on('adiak ~mpi build_type=Release')
 
-    depends_on('caliper@2.7.0 +adiak +mpi ~libunwind ~libdw ~libpfm ~gotcha ~sampler build_type=Release')
+    depends_on('caliper@2.7.0 +adiak ~mpi ~libunwind ~libdw ~libpfm ~gotcha ~sampler build_type=Release')
 
     with when('+cuda'):
         for sm_ in CudaPackage.cuda_arch_values:
@@ -234,6 +244,13 @@ class Tcscf(CMakePackage, CudaPackage):
             else:
                 cfg.write(cmake_cache_option("ENABLE_CUDA", False))
 
+            cfg.write('#{0}\n'.format('-' * 80))
+            cfg.write('# System Math Libraries\n')
+            cfg.write('#{0}\n\n'.format('-' * 80))
+
+            cfg.write(cmake_cache_list('BLAS_LIBRARIES', spec['blas'].libs))
+            cfg.write(cmake_cache_list('LAPACK_LIBRARIES', spec['lapack'].libs))
+
             cfg.write("#{0}\n".format("-" * 80))
             cfg.write("# CAMP\n")
             cfg.write("#{0}\n\n".format("-" * 80))
@@ -279,6 +296,20 @@ class Tcscf(CMakePackage, CudaPackage):
             cfg.write("#{0}\n\n".format("-" * 80))
 
             cfg.write(cmake_cache_option('ENABLE_ADDR2LINE', '+addr2line' in spec))
+
+            cfg.write("#{0}\n".format("-" * 80))
+            cfg.write("# Boost\n")
+            cfg.write("#{0}\n\n".format("-" * 80))
+
+            cfg.write(cmake_cache_option("ENABLE_BOOST", True))
+            cfg.write(cmake_cache_entry("BOOST_DIR", spec['boost'].prefix))
+
+            cfg.write("#{0}\n".format("-" * 80))
+            cfg.write("# GSL\n")
+            cfg.write("#{0}\n\n".format("-" * 80))
+
+            cfg.write(cmake_cache_option("ENABLE_GSL", True))
+            cfg.write(cmake_cache_entry("GSL_DIR", spec['gsl'].prefix))
 
     def cmake_args(self):
         spec = self.spec

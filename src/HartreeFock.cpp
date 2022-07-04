@@ -1,5 +1,7 @@
 #include "HartreeFock.hpp"
 
+#include "caliperInterface.hpp"
+
 namespace tcscf
 {
 
@@ -13,21 +15,23 @@ void constructFockOperator(
   ArrayView4d< T const > const & twoElectronTerms,
   ArrayView2d< T const > const & density )
 {
+  TCSCF_MARK_FUNCTION;
+
   IndexType const basisSize = fockOperator.size( 0 );
-  for( IndexType i = 0; i < basisSize; ++i )
+  for( IndexType u = 0; u < basisSize; ++u )
   {
-    for( IndexType j = 0; j < basisSize; ++j )
+    for( IndexType v = 0; v < basisSize; ++v )
     {
       T tmp = 0;
       for( IndexType a = 0; a < basisSize; ++a )
       {
         for( IndexType b = 0; b < basisSize; ++b)
         {
-          tmp += density( a, b ) * (twoElectronTerms( j, b, a, i ) - twoElectronTerms( j, b, i, a ) / T{ 2 });
+          tmp += density( a, b ) * (twoElectronTerms( u, b, v, a ) - twoElectronTerms( u, b, a, v ) / T{ 2 });
         }
       }
 
-      fockOperator( j, i ) = oneElectronTerms( j, i ) + tmp;
+      fockOperator( u, v ) = oneElectronTerms( u, v ) + tmp;
     }
   }
 }
@@ -38,21 +42,23 @@ void getNewDensity(
   ArrayView2d< T > const & density,
   ArrayView2d< T const, 0 > const & eigenvectors )
 {
+  TCSCF_MARK_FUNCTION;
+
   LVARRAY_ERROR_IF_NE( numElectrons % 2, 0 );
   IndexType const basisSize = eigenvectors.size( 0 );
   
   // TODO: replace with with matrix multiplication C C^\dagger
-  for( IndexType a = 0; a < basisSize; ++a )
+  for( IndexType u = 0; u < basisSize; ++u )
   {
-    for( IndexType b = 0; b < basisSize; ++b )
+    for( IndexType v = 0; v < basisSize; ++v )
     {
       T tmp = 0;
-      for( IndexType i = 0; i < numElectrons / 2; ++i )
+      for( IndexType a = 0; a < numElectrons / 2; ++a )
       {
-        tmp += eigenvectors( a, i ) * std::conj( eigenvectors( b, i ) );
+        tmp += eigenvectors( u, a ) * std::conj( eigenvectors( v, a ) );
       }
 
-      density( a, b ) = T{ 2 } * tmp;
+      density( u, v ) = T{ 2 } * tmp;
     }
   }
 }
@@ -63,14 +69,16 @@ T calculateEnergy(
   ArrayView2d< T const > const & oneElectronTerms,
   ArrayView2d< T const > const & density )
 {
+  TCSCF_MARK_FUNCTION;
+
   IndexType const basisSize = oneElectronTerms.size( 0 );
   
   T energy = 0;
-  for( int i = 0; i < basisSize; ++i )
+  for( int u = 0; u < basisSize; ++u )
   {
-    for( int j = 0; j < basisSize; ++j )
+    for( int v = 0; v < basisSize; ++v )
     {
-      energy += density( i, j ) * (oneElectronTerms( j, i ) + fockOperator( j, i ));
+      energy += density( v, u ) * (oneElectronTerms( u, v ) + fockOperator( u, v ));
     }
   }
 
@@ -86,6 +94,8 @@ void RCSHartreeFock< T >::compute(
   ArrayView2d< T const > const & oneElectronTerms,
   ArrayView4d< T const > const & twoElectronTerms )
 {
+  TCSCF_MARK_FUNCTION;
+
   LVARRAY_ERROR_IF_NE( oneElectronTerms.size( 1 ), nBasis );
 
   LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 0 ), nBasis );
@@ -104,9 +114,7 @@ void RCSHartreeFock< T >::compute(
 
   T previousEnergy = std::numeric_limits< Real >::max();
 
-  LVARRAY_LOG_VAR( oneElectronTerms );
-
-  for( int i = 0; i < 10; ++i )
+  for( int i = 0; i < 100; ++i )
   {
     internal::constructFockOperator( fockOperator.toView(), oneElectronTerms, twoElectronTerms, density.toViewConst() );
 

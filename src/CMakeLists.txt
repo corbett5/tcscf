@@ -4,10 +4,14 @@
 set( tcscf_headers
 	AtomicBasis.hpp
     blasLapackInterface.hpp
+    caliperInterface.hpp
     HartreeFock.hpp
+    HydrogenLikeBasis.hpp
     LvArrayInterface.hpp
     mathFunctions.hpp
+    OchiBasis.hpp
     qmcWrapper.hpp
+    setup.hpp
 )
 
 #
@@ -15,7 +19,9 @@ set( tcscf_headers
 #
 set( tcscf_sources
      blasLapackInterface.cpp
+     caliperInterface.cpp
      HartreeFock.cpp
+     setup.cpp
 )
 
 set( dependencyList ${dependencyList} blas lapack boost gsl adiak lvarray optionparser )

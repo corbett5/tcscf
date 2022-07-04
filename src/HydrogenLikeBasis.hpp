@@ -67,7 +67,7 @@ std::complex< REAL > coreMatrixElement(
   HydrogenLikeBasisFunction< REAL > const & b1,
   HydrogenLikeBasisFunction< REAL > const & b2 )
 {
-  if( b1.n != b2.b ) return 0;
+  if( b1.n != b2.n ) return 0;
   if( b1.l != b2.l ) return 0;
   if( b1.m != b2.m ) return 0;
 

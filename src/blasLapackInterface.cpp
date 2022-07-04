@@ -1,5 +1,7 @@
 #include "blasLapackInterface.hpp"
 
+#include "caliperInterface.hpp"
+
 /// This macro provide a flexible interface for Fortran naming convention for compiled objects
 // #ifdef FORTRAN_MANGLE_NO_UNDERSCORE
 #define FORTRAN_MANGLE( name ) name
@@ -60,10 +62,13 @@ void GEOSX_zheev(
 namespace tcscf
 {
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
 void eigenvalues(
   ArrayView2d< double, 0 > const & A,
   ArrayView1d< std::complex< double > > const & lambda )
 {
+  TCSCF_MARK_FUNCTION;
+
   LVARRAY_ASSERT_EQ_MSG( A.size( 0 ), A.size( 1 ), "The matrix A must be square." );
 
   LVARRAY_ASSERT_EQ_MSG( A.size( 0 ), lambda.size(), "The matrix A and lambda have incompatible sizes." );
@@ -110,11 +115,14 @@ void eigenvalues(
   LVARRAY_ERROR_IF_NE_MSG( INFO, 0, "The algorithm computing eigenvalues failed to converge." );
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
 template< typename T >
 void hermitianEigendecomposition(
     ArrayView2d< std::complex< T >, 0 > const & A,
     ArrayView1d< T > const & eigenValues )
 {
+  TCSCF_MARK_FUNCTION;
+
   LVARRAY_ASSERT_EQ_MSG( A.size( 0 ), A.size( 1 ),
     "The matrix A must be square." );
 

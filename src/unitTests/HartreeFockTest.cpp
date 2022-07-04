@@ -1,5 +1,7 @@
+#include "../setup.hpp"
+#include "../caliperInterface.hpp"
 #include  "../HartreeFock.hpp"
-#include "../OchiBasis.hpp"
+#include "../HydrogenLikeBasis.hpp"
 
 
 #include "testingCommon.hpp"
@@ -9,23 +11,22 @@ namespace tcscf::testing
 
 TEST( HartreeFock, Helium )
 {
-  double const alpha = 1;
   int const Z = 2;
 
-  std::vector< OchiBasisFunction< double > > basisFunctions = {
-    OchiBasisFunction< double >{ alpha, 1, 0, +0 },
-    OchiBasisFunction< double >{ alpha, 1, 1, -1 },
-    OchiBasisFunction< double >{ alpha, 1, 1, +0 },
-    OchiBasisFunction< double >{ alpha, 1, 1, +1 },
-    OchiBasisFunction< double >{ alpha, 2, 0, +0 },
-    OchiBasisFunction< double >{ alpha, 2, 1, -1 },
-    OchiBasisFunction< double >{ alpha, 2, 1, +0 },
-    OchiBasisFunction< double >{ alpha, 2, 1, +1 },
-    // OchiBasisFunction< double >{ alpha, 2, 2, -2 },
-    // OchiBasisFunction< double >{ alpha, 2, 2, -1 },
-    // OchiBasisFunction< double >{ alpha, 2, 2, 0 },
-    // OchiBasisFunction< double >{ alpha, 2, 2, +1 },
-    // OchiBasisFunction< double >{ alpha, 2, 2, +2 }
+  std::vector< HydrogenLikeBasisFunction< double > > basisFunctions = {
+    HydrogenLikeBasisFunction< double >{ Z, 1, 0, +0 },
+    HydrogenLikeBasisFunction< double >{ Z, 2, 0, +0 },
+    HydrogenLikeBasisFunction< double >{ Z, 2, 1, -1 },
+    HydrogenLikeBasisFunction< double >{ Z, 2, 1, +0 },
+    HydrogenLikeBasisFunction< double >{ Z, 2, 1, +1 },
+    // HydrogenLikeBasisFunction< double >{ Z, 3, 1, -1 },
+    // HydrogenLikeBasisFunction< double >{ Z, 3, 1, +0 },
+    // HydrogenLikeBasisFunction< double >{ Z, 3, 1, +1 },
+    // HydrogenLikeBasisFunction< double >{ Z, 3, 2, -2 },
+    // HydrogenLikeBasisFunction< double >{ Z, 3, 2, -1 },
+    // HydrogenLikeBasisFunction< double >{ Z, 3, 2, +0 },
+    // HydrogenLikeBasisFunction< double >{ Z, 3, 2, +1 },
+    // HydrogenLikeBasisFunction< double >{ Z, 3, 2, +2 },
   };
 
   IndexType const nBasis = basisFunctions.size();
@@ -41,3 +42,18 @@ TEST( HartreeFock, Helium )
 }
 
 } // namespace tcscf::testing
+
+
+int main( int argc, char * * argv )
+{
+  ::testing::InitGoogleTest( &argc, argv );
+
+  tcscf::CommandLineOptions options = tcscf::parseCommandLineOptions( argc, argv );
+  LVARRAY_LOG_VAR( options.caliperArgs );
+  tcscf::CaliperWrapper caliperWrapper( options.caliperArgs );
+
+  int const result = RUN_ALL_TESTS();
+  tcscf::printHighWaterMarks();
+
+  return result;
+}

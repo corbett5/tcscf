@@ -1,6 +1,7 @@
 #pragma once
 
 #include "LvArrayInterface.hpp"
+#include "caliperInterface.hpp"
 #include "qmcWrapper.hpp"
 #include "mathFunctions.hpp"
 
@@ -79,6 +80,8 @@ auto oneElectronSymmetricHermitianArray(
   int const nBasis,
   LAMBDA && lambda ) -> Array2d< decltype( lambda( 0, 0 ) ) >
 {
+  TCSCF_MARK_FUNCTION;
+
   LVARRAY_ERROR_IF_LT( nBasis, 0 );
 
   using ResultType = decltype( lambda( 0, 0 ) );
@@ -154,6 +157,8 @@ auto twoElectronSymmetricHermitianArray(
 template< typename BASIS >
 auto computeCoreMatrix( int const Z, std::vector< BASIS > const & basisFunctions )
 {
+  TCSCF_MARK_FUNCTION;
+
   return oneElectronSymmetricHermitianArray( basisFunctions.size(),
     [Z, &basisFunctions] ( int const a, int const b )
     {
@@ -168,11 +173,13 @@ auto computeCoreMatrix( int const Z, std::vector< BASIS > const & basisFunctions
 template< typename BASIS >
 auto computeR12Matrix( std::vector< BASIS > const & basisFunctions )
 {
+  TCSCF_MARK_FUNCTION;
+
   return twoElectronSymmetricHermitianArray( basisFunctions.size(), BASIS::isBasisReal,
     [&basisFunctions] ( int const a, int const b, int const c, int const d )
     {
       return r12MatrixElement( basisFunctions[ a ], basisFunctions[ b ],
-                                   basisFunctions[ c ], basisFunctions[ d ] );
+                               basisFunctions[ c ], basisFunctions[ d ] );
     }
   );
 }

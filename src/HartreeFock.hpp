@@ -6,12 +6,9 @@ namespace tcscf
 {
 
 template< typename T >
-using RealVersion = decltype( std::real( T {} ) );
-
-template< typename T >
 struct RCSHartreeFock
 {
-  using Real = RealVersion< T >;
+  using Real = RealType< T >;
 
   RCSHartreeFock( IndexType const numElectrons, IndexType const numBasisFunctions ):
     nElectrons{ numElectrons },

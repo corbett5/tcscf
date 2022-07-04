@@ -7,6 +7,10 @@
 namespace tcscf
 {
 
+// TODO: Rename after the LAPACK functions they wrap.
+// TODO: Put these methods in a class that holds temporary data and info.
+// TODO: Switch to zheevr instead of zheev
+
 void eigenvalues(
   ArrayView2d< double, 0 > const & A,
   ArrayView1d< std::complex< double > > const & lambda );

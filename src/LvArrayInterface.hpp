@@ -6,6 +6,8 @@
 #include "memcpy.hpp"
 #include "output.hpp"
 
+#include <complex>
+
 namespace tcscf
 {
 
@@ -54,5 +56,13 @@ using Array4d = Array< T, 4, PERM >;
 /// A four dimensional view.
 template< typename T, int USD=3 >
 using ArrayView4d = ArrayView< T, 4, USD >;
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// More common stuff
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+template< typename T >
+using RealType = decltype( std::real( T {} ) );
 
 } // namespace tcscf

@@ -27,6 +27,14 @@ TEST( HartreeFock, Helium )
     // HydrogenLikeBasisFunction< double >{ Z, 3, 2, +0 },
     // HydrogenLikeBasisFunction< double >{ Z, 3, 2, +1 },
     // HydrogenLikeBasisFunction< double >{ Z, 3, 2, +2 },
+    // HydrogenLikeBasisFunction< double >{ Z, 4, 0, +0 },
+    // HydrogenLikeBasisFunction< double >{ Z, 5, 0, +0 },
+    // HydrogenLikeBasisFunction< double >{ Z, 6, 0, +0 },
+    // HydrogenLikeBasisFunction< double >{ Z, 7, 0, +0 },
+    // HydrogenLikeBasisFunction< double >{ Z, 8, 0, +0 },
+    // HydrogenLikeBasisFunction< double >{ Z, 9, 0, +0 },
+    // HydrogenLikeBasisFunction< double >{ Z, 10, 0, +0 },
+
   };
 
   IndexType const nBasis = basisFunctions.size();

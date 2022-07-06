@@ -77,7 +77,7 @@ struct SymmetricEigendecomposition : public ::testing::Test
       for( IndexType j = i + 1; j < size; ++j )
       {
         matrix( i, j ) = randomNumber();
-        matrix( j, i ) = std::conj( matrix( i, j ) );
+        matrix( j, i ) = conj( matrix( i, j ) );
       }
     }
 

@@ -39,7 +39,7 @@ struct OchiBasisFunction
    */
   Real fnl(Real const r) const
   {
-    return normalization * std::pow(r, l + 1) * boost::math::laguerre(n, 2 * l + 2, 2 * alpha * r) * std::exp(-alpha * r);
+    return normalization * std::pow(r, l + 1) * assocLaguerre(n, 2 * l + 2, 2 * alpha * r) * std::exp(-alpha * r);
   }
 
   Real const alpha;

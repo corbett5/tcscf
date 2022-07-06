@@ -28,7 +28,7 @@ struct HydrogenLikeBasisFunction
     normalization{ -std::pow( 2 * beta, l + 1.5 ) / std::sqrt( 2 * n * truncatedFactorial( n + l, n - l - 1 ) ) }
   {
     LVARRAY_ERROR_IF_LT( Z, 0 );
-    LVARRAY_ERROR_IF_LT( n, 0 );
+    LVARRAY_ERROR_IF_LE( n, 0 );
     LVARRAY_ERROR_IF_GE( l, n );
     LVARRAY_ERROR_IF_GT( std::abs( m ), l );
   }
@@ -44,7 +44,7 @@ struct HydrogenLikeBasisFunction
    */
   Real radialComponent(Real const r) const
   {
-    return normalization * std::pow( r, l ) * boost::math::laguerre( n - l - 1 , 2 * l + 1, 2 * beta * r ) * std::exp( -beta * r );
+    return normalization * std::pow( r, l ) * assocLaguerre( n - l - 1 , 2 * l + 1, 2 * beta * r ) * std::exp( -beta * r );
   }
 
   int const n;
@@ -62,7 +62,7 @@ struct HydrogenLikeBasisFunction
  * 
  */
 template< typename REAL >
-std::complex< REAL > coreMatrixElement(
+REAL coreMatrixElement(
   int const Z,
   HydrogenLikeBasisFunction< REAL > const & b1,
   HydrogenLikeBasisFunction< REAL > const & b2 )

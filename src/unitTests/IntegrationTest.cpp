@@ -1,4 +1,7 @@
-#include "../quadrature.hpp"
+#include "../integration/quadrature.hpp"
+#include "../integration/ChebyshevGauss.hpp"
+#include "../integration/Lebedev.hpp"
+
 #include "../setup.hpp"
 #include "../caliperInterface.hpp"
 
@@ -6,72 +9,91 @@
 
 #include "testingCommon.hpp"
 
-namespace tcscf::testing
+namespace tcscf::integration::testing
 {
 
 TEST( ChebyshevGauss, linear )
 {
-  quadrature::ChebyshevGauss< double > integrator( 100 );
-  double const value = integrator.integrate(
-    [] ( double const x )
+  ChebyshevGauss< double > integrator( 100 );
+  double const value = integrate( integrator,
+    [] ( CArray< double, 1 > const & x )
     {
-      return x;
+      return x[ 0 ];
     }
   );
 
   EXPECT_NEAR( value, 0, 3e-16 );
 }
 
+
 TEST( ChebyshevGauss, quadratic )
 {
-  quadrature::ChebyshevGauss< double > integrator( 1000 );
-  double const value = integrator.integrate(
-    [] ( double const x )
+  ChebyshevGauss< double > integrator( 1000 );
+  double const value = integrate( integrator, 
+    [] ( CArray< double, 1 > const & x )
     {
-      return x * x;
+      return x[ 0 ] * x[ 0 ];
     }
   );
 
   EXPECT_NEAR( value, 2.0 / 3.0, 1e-5 );
 }
 
+
 TEST( ChebyshevGauss, cubic )
 {
-  quadrature::ChebyshevGauss< double > integrator( 1000 );
-  double const value = integrator.integrate(
-    [] ( double const x )
+  ChebyshevGauss< double > integrator( 1000 );
+  double const value = integrate( integrator,
+    [] ( CArray< double, 1 > const & x )
     {
-      return std::pow( x, 3 ) + 3 * std::pow( x, 2 ) - 4 * x;
+      return std::pow( x[ 0 ], 3 ) + 3 * std::pow( x[ 0 ], 2 ) - 4 * x[ 0 ];
     }
   );
 
   EXPECT_NEAR( value, 2.0, 1e-5 );
 }
 
+
+TEST( ChebyshevGauss, linearGrid )
+{
+  Array2d< double > const grid = createGrid( ChebyshevGauss< double >( 100 ) );
+
+  double const value = integrate< 1 >( grid.toViewConst(),
+    [] ( CArray< double, 1 > const & x )
+    {
+      return x[ 0 ];
+    }
+  );
+
+  EXPECT_NEAR( value, 0, 3e-16 );
+}
+
+
 TEST( TreutlerAhlrichs, exponential )
 {
-  quadrature::ChebyshevGauss< double > integrator( 100 );
+  ChebyshevGauss< double > integrator( 100 );
   changeOfVariables::TreutlerAhlrichs< double > changeOfVariables( 1.0 );
 
-  double const value = quadrature::integrate( integrator, changeOfVariables, 
-    [] ( double const r )
+  double const value = integrate( integrator, changeOfVariables, 
+    [] ( CArray< double, 1 > const & r )
     {
-      return std::exp( -r );
+      return std::exp( -r[ 0 ] );
     }
   );
 
   EXPECT_NEAR( value, 1.0, 1e-7 );
 }
 
+
 TEST( TreutlerAhlrichs, exponentialPolynomial )
 {
-  quadrature::ChebyshevGauss< double > integrator( 100 );
+  ChebyshevGauss< double > integrator( 100 );
   changeOfVariables::TreutlerAhlrichs< double > changeOfVariables( 1.0 );
 
-  double const value = quadrature::integrate( integrator, changeOfVariables, 
-    [] ( double const r )
+  double const value = integrate( integrator, changeOfVariables, 
+    [] ( CArray< double, 1 > const & r )
     {
-      return (std::pow( r, 2 ) - 3 * r) * std::exp( -3 * r / 2 );
+      return (std::pow( r[ 0 ], 2 ) - 3 * r[ 0 ]) * std::exp( -3 * r[ 0 ] / 2 );
     }
   );
 
@@ -80,15 +102,15 @@ TEST( TreutlerAhlrichs, exponentialPolynomial )
 
 TEST( TreutlerAhlrichs, exponentialGrid )
 {
-  quadrature::ChebyshevGauss< double > integrator( 100 );
+  ChebyshevGauss< double > integrator( 100 );
   changeOfVariables::TreutlerAhlrichs< double > changeOfVariables( 1.0 );
 
-  Array2d< double > const grid = quadrature::createGrid( integrator, changeOfVariables );
+  Array2d< double > const grid = createGrid( integrator, changeOfVariables );
 
-  double const value = quadrature::integrate( grid.toViewConst(), 
-    [] ( double const r )
+  double const value = integrate< 1 >( grid.toViewConst(), 
+    [] ( CArray< double, 1 > const & r )
     {
-      return std::exp( -r );
+      return std::exp( -r[ 0 ] );
     }
   );
 
@@ -97,15 +119,15 @@ TEST( TreutlerAhlrichs, exponentialGrid )
 
 TEST( TreutlerAhlrichs, exponentialPolynomialGrid )
 {
-  quadrature::ChebyshevGauss< double > integrator( 100 );
+  ChebyshevGauss< double > integrator( 100 );
   changeOfVariables::TreutlerAhlrichs< double > changeOfVariables( 1.0 );
 
-  Array2d< double > const grid = quadrature::createGrid( integrator, changeOfVariables );
+  Array2d< double > const grid = createGrid( integrator, changeOfVariables );
 
-  double const value = quadrature::integrate( grid.toViewConst(), 
-    [] ( double const r )
+  double const value = integrate< 1 >( grid.toViewConst(), 
+    [] ( CArray< double, 1 > const & r )
     {
-      return (std::pow( r, 2 ) - 3 * r) * std::exp( -3 * r / 2 );
+      return (std::pow( r[ 0 ], 2 ) - 3 * r[ 0 ]) * std::exp( -3 * r[ 0 ] / 2 );
     }
   );
 
@@ -115,10 +137,10 @@ TEST( TreutlerAhlrichs, exponentialPolynomialGrid )
 
 TEST( Lebedev, constant )
 {
-  quadrature::Lebedev< double > integrator( 6 );
+  Lebedev< double > integrator( 3 );
 
-  double const value = integrator.integrate(
-    [] ( double const, double const )
+  double const value = integrate( integrator,
+    [] ( CArray< double, 2 > const & )
     {
       return 1;
     }
@@ -127,34 +149,72 @@ TEST( Lebedev, constant )
   EXPECT_NEAR( value, 4 * pi< double >, 3e-14 );
 }
 
+
+TEST( Lebedev, SphericalHarmonics )
+{
+  for( int order : { 3, 5, 7 } )
+  {
+    Lebedev< double > integrator( order );
+
+    for( int l1 = 0; l1 <= order; ++l1 )
+    {
+      for( int l2 = l1; l2 <= order - l1; ++l2 )
+      {
+        for( int m1 = -l1; m1 <= l1; ++m1 )
+        {
+          for( int m2 = -l2; m2 <= l2; ++m2 )
+          {
+            std::complex< double > const value = integrate( integrator,
+              [l1, l2, m1, m2] ( CArray< double, 2 > const & thetaAndPhi )
+              {
+                double const theta = thetaAndPhi[ 0 ];
+                double const phi = thetaAndPhi[ 1 ];
+                return conj( sphericalHarmonic( l1, m1, theta, phi ) ) * sphericalHarmonic( l2, m2, theta, phi );
+              }
+            );
+
+            bool const delta = (l1 == l2) && (m1 == m2);
+            EXPECT_COMPLEX_NEAR( value, delta, (l1 + l2 + 2) * 1e-15 );
+          }
+        }
+      }
+    }
+  }
+}
+
+#if 0
+
 TEST( TreutlerAhlrichsLebedev, orthogonal )
 {
-  quadrature::Lebedev< double > integrator( 6 );
-
-  quadrature::ChebyshevGauss< double > radialIntegrator( 100 );
+  ChebyshevGauss< double > radialIntegrator( 10000 );
   changeOfVariables::TreutlerAhlrichs< double > changeOfVariables( 1.0 );
 
-  Array2d< double > const grid = quadrature::createGrid( radialIntegrator, changeOfVariables );
+  Array2d< double > const grid = createGrid( radialIntegrator, changeOfVariables );
 
-  HydrogenLikeBasisFunction< double > b1 { 1, 5, 4, 3 };
-  HydrogenLikeBasisFunction< double > b2 { 1, 5, 4, 3 };
+  HydrogenLikeBasisFunction< double > b1 { 1, 3, 1, 1 };
+  HydrogenLikeBasisFunction< double > b2 { 1, 3, 2, 1 };
 
-  quadrature::Lebedev< double > angleIntegrator( 6 );
+  Lebedev< double > angleIntegrator( 3 );
 
-  std::complex< double > const value = angleIntegrator.integrate(
-    [&] ( double const theta, double const phi )
+  std::complex< double > const value = integrate( angleIntegrator,
+    [&] ( CArray< double, 2 > const & thetaAndPhi )
     {
-      auto const integrand = [&] ( double const r )
+      double const theta = thetaAndPhi[ 0 ];
+      double const phi = thetaAndPhi[ 1 ];
+
+      auto const integrand = [&] ( CArray< double, 1 > const & r )
       {
-        return std::conj( b1( r, theta, phi ) ) * b2( r, theta, phi ) * std::pow( r, 2 );
+        return std::conj( b1( r[ 0 ], theta, phi ) ) * b2( r[ 0 ], theta, phi ) * std::pow( r[ 0 ], 2 );
       };
 
-      return quadrature::integrate( grid.toViewConst(), integrand );
+      return integrate< 1 >( grid.toViewConst(), integrand );
     }
   );
 
   LVARRAY_LOG_VAR( value );
 }
+
+#endif
 
 } // namespace tcscf::testing
 

@@ -1,3 +1,5 @@
+# TODO: add CMake lists to subdirectories
+
 #
 # Specify all headers
 #
@@ -12,7 +14,10 @@ set( tcscf_headers
     OchiBasis.hpp
     qmcWrapper.hpp
     setup.hpp
-    quadrature.hpp
+    integration/changeOfVariables.hpp
+    integration/ChebyshevGauss.hpp
+    integration/Lebedev.hpp
+    integration/quadrature.hpp
 )
 
 #
@@ -23,7 +28,7 @@ set( tcscf_sources
      caliperInterface.cpp
      HartreeFock.cpp
      setup.cpp
-     quadrature.cpp
+     integration/Lebedev.cpp
 )
 
 set( dependencyList ${dependencyList} blas lapack boost gsl adiak lvarray optionparser )

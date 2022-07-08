@@ -12,6 +12,7 @@ set( tcscf_headers
     OchiBasis.hpp
     qmcWrapper.hpp
     setup.hpp
+    quadrature.hpp
 )
 
 #
@@ -22,6 +23,7 @@ set( tcscf_sources
      caliperInterface.cpp
      HartreeFock.cpp
      setup.cpp
+     quadrature.cpp
 )
 
 set( dependencyList ${dependencyList} blas lapack boost gsl adiak lvarray optionparser )

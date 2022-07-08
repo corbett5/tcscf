@@ -171,6 +171,16 @@ typename std::complex< typename BASIS_FUNCTION::Real > atomicExchangeOperator(
   );
 }
 
+/**
+ * 
+ */
+struct AtomicParams
+{
+  int const n;
+  int const l;
+  int const m;
+};
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Matrix stuff
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -178,91 +188,118 @@ typename std::complex< typename BASIS_FUNCTION::Real > atomicExchangeOperator(
 /**
  * 
  */
-template< typename LAMBDA >
-auto oneElectronSymmetricHermitianArray(
-  int const nBasis,
-  LAMBDA && lambda ) -> Array2d< decltype( lambda( 0, 0 ) ) >
+template< typename T, typename LAMBDA >
+void fillOneElectronHermitianMatrix(
+  ArrayView2d< T > const & matrix,
+  LAMBDA && lambda )
 {
   TCSCF_MARK_FUNCTION;
 
-  LVARRAY_ERROR_IF_LT( nBasis, 0 );
+  LVARRAY_ERROR_IF_NE( matrix.size( 0 ), matrix.size( 1 ) );
 
   using ResultType = decltype( lambda( 0, 0 ) );
-  Array2d< ResultType > matrix( nBasis, nBasis );
 
-  for( int a = 0; a < nBasis; ++a )
+  for( int a = 0; a < matrix.size( 0 ); ++a )
   {
-    for( int b = a; b < nBasis; ++b )
+    for( int b = a; b < matrix.size( 0 ); ++b )
     {
       ResultType const value = lambda( a, b );
-      matrix( a, b ) = value;
-      matrix( b, a ) = conj( value );
+      matrix( a, b ) += value;
+
+      if( a != b )
+      {
+        matrix( b, a ) += conj( value );
+      }
     }
   }
-
-  return matrix;
 }
 
 /**
  * 
  */
-template< typename LAMBDA >
-auto twoElectronSymmetricHermitianArray(
-  int const nBasis,
+template< typename T, typename LAMBDA >
+void fillTwoElectronSymmetricHermitianArray(
+  ArrayView4d< T > const & array,
   bool const realBasisFunctions,
-  LAMBDA && lambda ) -> Array4d< decltype( lambda( 0, 0, 0, 0 ) ) >
+  LAMBDA && lambda )
 {
-  LVARRAY_ERROR_IF( realBasisFunctions, "Not yet supported." );
+  TCSCF_MARK_FUNCTION;
 
-  LVARRAY_ERROR_IF_LT( nBasis, 0 );
+  LVARRAY_ERROR_IF_NE( array.size( 0 ), array.size( 1 ) );
+  LVARRAY_ERROR_IF_NE( array.size( 0 ), array.size( 2 ) );
+  LVARRAY_ERROR_IF_NE( array.size( 0 ), array.size( 3 ) );
 
-  using ResultType = decltype( lambda( 0, 0, 0, 0 ) );
-  Array4d< ResultType > matrix( nBasis, nBasis, nBasis, nBasis );
+  int const N = array.size( 0 );
 
-  for( int a = 0; a < nBasis; ++a )
+  for( int a = 0; a < N; ++a )
   {
-    for( int b = a; b < nBasis; ++b )
+    for( int b = a; b < N; ++b )
     {
-      for( int c = a; c < nBasis; ++c )
+      for( int c = a; c < N; ++c )
       {
-        int dStart = realBasisFunctions ? b : a;
-        for( int d = dStart; d < nBasis; ++d )
+        int const dStart = realBasisFunctions ? b : a;
+        for( int d = dStart; d < N; ++d )
         {
-          ResultType const value = lambda( a, b, c, d );
+          T const value{ lambda( a, b, c, d ) };
 
-          matrix( a, b, c, d ) = value;
+          array( a, b, c, d ) += value;
 
-          if( a != b && a != c && a != d )
+          bool const useSymmetry = a != b;
+          bool const useHermitian = a != c && a != d;
+          bool const useReal = realBasisFunctions && d != b;
+
+          if( useSymmetry )
           {
-            matrix( b, a, d, c ) = value;
+            array( b, a, d, c ) += value;
           }
 
-          if( a != b && a != c )
+          if( useHermitian || (realBasisFunctions && a != c) )
           {
-            matrix( c, d, a, b ) = conj( value );
+            array( c, d, a, b ) += conj( value );
           }
 
-          if( a != d )
+          if( useHermitian && useSymmetry )
           { 
-            matrix( d, c, b, a ) = conj( value );
+            array( d, c, b, a ) += conj( value );
+          }
+
+          if( useReal )
+          {
+            array( a, d, c, b ) += value;
+          }
+
+          if( useReal && useSymmetry )
+          {
+            array( d, a, b, c ) += value;
+          }
+
+          if( useReal && useHermitian )
+          {
+            array( c, b, a, d ) += value;
+          }
+
+          if( useReal && useHermitian && useSymmetry )
+          {
+            array( b, c, d, a ) += value;
           }
         }
       }
     }
   }
-
-  return matrix;
 }
 
 /**
  * 
  */
-template< typename BASIS >
-auto computeCoreMatrix( int const Z, std::vector< BASIS > const & basisFunctions )
+template< typename BASIS, typename T >
+void fillCoreMatrix(
+  int const Z,
+  std::vector< BASIS > const & basisFunctions,
+  ArrayView2d< T > const & matrix )
 {
-  TCSCF_MARK_FUNCTION;
+  LVARRAY_ERROR_IF_NE( matrix.size( 0 ), IndexType( basisFunctions.size() ) );
 
-  return oneElectronSymmetricHermitianArray( basisFunctions.size(),
+  fillOneElectronHermitianMatrix( matrix,
     [Z, &basisFunctions] ( int const a, int const b )
     {
       return coreMatrixElement( Z, basisFunctions[ a ], basisFunctions[ b ] );
@@ -273,12 +310,12 @@ auto computeCoreMatrix( int const Z, std::vector< BASIS > const & basisFunctions
 /**
  * 
  */
-template< typename BASIS >
-auto computeR12Matrix( std::vector< BASIS > const & basisFunctions )
+template< typename BASIS, typename T >
+auto fillR12Array(
+  std::vector< BASIS > const & basisFunctions,
+  ArrayView4d< T > const & array )
 {
-  TCSCF_MARK_FUNCTION;
-
-  return twoElectronSymmetricHermitianArray( basisFunctions.size(), BASIS::isBasisReal,
+  return fillTwoElectronSymmetricHermitianArray( array, BASIS::isBasisReal,
     [&basisFunctions] ( int const a, int const b, int const c, int const d )
     {
       return r12MatrixElement( basisFunctions[ a ], basisFunctions[ b ],
@@ -290,12 +327,14 @@ auto computeR12Matrix( std::vector< BASIS > const & basisFunctions )
 /**
  * 
  */
-template< typename BASIS >
-Array4d< std::complex< typename BASIS::Real > > computeAtomicR12Matrix( std::vector< BASIS > const & basisFunctions )
+template< typename BASIS, typename T >
+void fillAtomicR12Array(
+  std::vector< BASIS > const & basisFunctions,
+  ArrayView4d< T > const & array )
 {
-  TCSCF_MARK_FUNCTION;
+  using Real = typename BASIS::Real;
 
-  return twoElectronSymmetricHermitianArray( basisFunctions.size(), BASIS::isBasisReal,
+  fillTwoElectronSymmetricHermitianArray( array, true,
     [&basisFunctions] ( int const a, int const b, int const c, int const d )
     {
       if( basisFunctions[ a ].l == basisFunctions[ c ].l &&
@@ -303,34 +342,37 @@ Array4d< std::complex< typename BASIS::Real > > computeAtomicR12Matrix( std::vec
           basisFunctions[ b ].l == basisFunctions[ d ].l &&
           basisFunctions[ b ].m == basisFunctions[ d ].m )
       {
-        auto const result = std::complex< typename BASIS::Real >{ atomicCoulombOperator( basisFunctions[ a ], basisFunctions[ b ], basisFunctions[ c ], basisFunctions[ d ] ) };
-        if( std::abs( result ) <= 0 )
-        {
-          LVARRAY_LOG( "(" << basisFunctions[ a ].n << ", " << basisFunctions[ a ].l << ", " << basisFunctions[ a ].m << "), " <<
-            "(" << basisFunctions[ b ].n << ", " << basisFunctions[ b ].l << ", " << basisFunctions[ b ].m << "), " << 
-            "(" << basisFunctions[ c ].n << ", " << basisFunctions[ c ].l << ", " << basisFunctions[ c ].m << "), " <<
-            "(" << basisFunctions[ d ].n << ", " << basisFunctions[ d ].l << ", " << basisFunctions[ d ].m << "), " );
-        }
-        return result;
+        return std::complex< Real >{ atomicCoulombOperator( basisFunctions[ a ], basisFunctions[ b ], basisFunctions[ c ], basisFunctions[ d ] ) };
       }
       
+      return std::complex< Real >{ 0 };
+    }
+  );
+
+  fillTwoElectronSymmetricHermitianArray( array, false,
+    [&basisFunctions] ( int const a, int const b, int const c, int const d )
+    {
+      if( basisFunctions[ a ].l == basisFunctions[ c ].l &&
+          basisFunctions[ a ].m == basisFunctions[ c ].m &&
+          basisFunctions[ b ].l == basisFunctions[ d ].l &&
+          basisFunctions[ b ].m == basisFunctions[ d ].m )
+      {
+        return std::complex< Real >{ 0 };
+      }
+
       if( basisFunctions[ a ].l == basisFunctions[ d ].l &&
           basisFunctions[ a ].m == basisFunctions[ d ].m &&
           basisFunctions[ b ].l == basisFunctions[ c ].l &&
           basisFunctions[ b ].m == basisFunctions[ c ].m )
       {
-        auto const result = atomicExchangeOperator( basisFunctions[ a ], basisFunctions[ b ], basisFunctions[ c ], basisFunctions[ d ] );
-        if( std::abs( result ) <= 0 )
-        {
-          LVARRAY_LOG( "(" << basisFunctions[ a ].n << ", " << basisFunctions[ a ].l << ", " << basisFunctions[ a ].m << "), " <<
-            "(" << basisFunctions[ b ].n << ", " << basisFunctions[ b ].l << ", " << basisFunctions[ b ].m << "), " << 
-            "(" << basisFunctions[ c ].n << ", " << basisFunctions[ c ].l << ", " << basisFunctions[ c ].m << "), " <<
-            "(" << basisFunctions[ d ].n << ", " << basisFunctions[ d ].l << ", " << basisFunctions[ d ].m << "), " );
-        }
-        return result;
+        return atomicExchangeOperator(
+          basisFunctions[ a ],
+          basisFunctions[ b ],
+          basisFunctions[ c ],
+          basisFunctions[ d ] );
       }
 
-      return std::complex< typename BASIS::Real >{ 0 };
+      return std::complex< Real >{ 0 };
     }
   );
 }

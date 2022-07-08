@@ -2,8 +2,7 @@
 
 #include "blasLapackInterface.hpp"
 
-// TODO: get rid of this include and instead template AtomicRCSHartreeFock on the basis type
-#include "HydrogenLikeBasis.hpp"
+#include "AtomicBasis.hpp"
 
 namespace tcscf
 {
@@ -35,29 +34,30 @@ struct RCSHartreeFock
 };
 
 
+
+template< typename REAL >
 struct AtomicRCSHartreeFock
 {
-  using Real = double;
-  using BasisFunction = HydrogenLikeBasisFunction< double >;
+  using Real = REAL;
 
   AtomicRCSHartreeFock(
     int const numElectrons,
-    std::vector< BasisFunction > const & functions ):
+    std::vector< AtomicParams > const & atomicParams ):
     nElectrons{ numElectrons },
-    basisFunctions( functions ),
-    density( basisFunctions.size(), basisFunctions.size() ),
-    fockOperator( basisFunctions.size(), basisFunctions.size() ),
-    eigenvalues( basisFunctions.size() )
+    params( atomicParams ),
+    density( params.size(), params.size() ),
+    fockOperator( params.size(), params.size() ),
+    eigenvalues( params.size() )
   {}
 
   void compute(
     ArrayView2d< Real const > const & oneElectronTerms,
-    ArrayView4d< std::complex< double > const > const & twoElectronTerms );
+    ArrayView4d< std::complex< Real > const > const & twoElectronTerms );
 
   int const nElectrons;
-  std::vector< BasisFunction > const basisFunctions;
-  Array2d< std::complex< double > > const density;
-  Array2d< std::complex< double >, RAJA::PERM_JI > const fockOperator;
+  std::vector< AtomicParams > const params;
+  Array2d< std::complex< Real > > const density;
+  Array2d< std::complex< Real >, RAJA::PERM_JI > const fockOperator;
   Array1d< Real > const eigenvalues;
 };
 

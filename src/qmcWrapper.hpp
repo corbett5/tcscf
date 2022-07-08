@@ -142,9 +142,9 @@ auto sphericalCoordinates5DIntegral( F && f )
   );
 
   integrators::Qmc< RETURN_TYPE, COORD_TYPE, 5, integrators::transforms::None::type > integrator;
-  // integrator.epsrel = 1e-6;
-  // integrator.epsabs = 1e-10;
-  // integrator.maxeval = 1e7;
+  integrator.epsrel = 1e-6;
+  integrator.epsabs = 1e-10;
+  integrator.maxeval = 1e7;
   auto const result = integrator.integrate( functor );
 
   // LVARRAY_LOG( result.evaluations << ", " << std::abs( result.error / result.integral ) );

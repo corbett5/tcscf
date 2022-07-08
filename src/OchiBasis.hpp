@@ -37,10 +37,14 @@ struct OchiBasisFunction
   /**
    * 
    */
-  Real fnl(Real const r) const
-  {
-    return normalization * std::pow(r, l + 1) * assocLaguerre(n, 2 * l + 2, 2 * alpha * r) * std::exp(-alpha * r);
-  }
+  Real fnl( Real const r ) const
+  { return normalization * std::pow( r, l + 1 ) * assocLaguerre( n, 2 * l + 2, 2 * alpha * r ) * std::exp(-alpha * r); }
+
+  /**
+   * 
+   */
+  Real radialComponent( Real const r ) const
+  { return fnl( r ) / r; }
 
   Real const alpha;
   int const n;
@@ -57,11 +61,13 @@ struct OchiBasisFunction
  * 
  */
 template< typename REAL >
-std::complex< REAL > coreMatrixElement(
+REAL coreMatrixElement(
   int const Z,
   OchiBasisFunction< REAL > const & b1,
   OchiBasisFunction< REAL > const & b2 )
 {
+  TCSCF_MARK_FUNCTION;
+
   LVARRAY_ERROR_IF_GT( std::abs( b1.alpha - b2.alpha ), 0 );
 
   if(b1.l != b2.l) return 0;

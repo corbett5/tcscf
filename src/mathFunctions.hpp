@@ -36,8 +36,11 @@ struct IsComplex< std::complex< T > >
 // Constants
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-template<class T>
+template< typename T >
 constexpr T pi = T( 3.1415926535897932385L );
+
+template< typename T >
+constexpr T ln2 = T( 0.693147180559945309L );
 
 template< typename T >
 constexpr std::complex< T > I = std::complex< T >( 0, 1 );

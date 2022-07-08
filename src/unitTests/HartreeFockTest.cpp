@@ -2,6 +2,7 @@
 #include "../caliperInterface.hpp"
 #include  "../HartreeFock.hpp"
 #include "../HydrogenLikeBasis.hpp"
+#include "../OchiBasis.hpp"
 
 
 #include "testingCommon.hpp"
@@ -13,9 +14,10 @@ namespace tcscf::testing
 TEST( AtomicHartreeFock, Helium )
 {
   int const Z = 2;
-  int const nMax = 3;
+  int const nMax = 2;
 
   std::vector< HydrogenLikeBasisFunction< double > > basisFunctions;
+  std::vector< AtomicParams > params;
 
   for( int n = 1; n <= nMax; ++n )
   {
@@ -24,20 +26,65 @@ TEST( AtomicHartreeFock, Helium )
       for( int m = -l; m <= l; ++m )
       {
         basisFunctions.emplace_back( Z, n, l, m );
+        params.emplace_back( AtomicParams{ n, l, m } );
       }
     }
   }
 
-  int const basisSize = basisFunctions.size();
+  IndexType const nBasis = basisFunctions.size();
 
-  Array2d< double > const coreMatrix = computeCoreMatrix( Z, basisFunctions );
-  Array4d< std::complex< double > > const twoElectronTerms = computeAtomicR12Matrix( basisFunctions );
+  Array2d< double > const coreMatrix( nBasis, nBasis );
+  fillCoreMatrix( Z, basisFunctions, coreMatrix );
 
-  Array2d< std::complex< double > > density( basisSize, basisSize );
-  Array2d< std::complex< double > > overlap;
+  Array4d< std::complex< double > > const twoElectronTerms( nBasis, nBasis, nBasis, nBasis );
+  fillAtomicR12Array( basisFunctions, twoElectronTerms );
 
-  AtomicRCSHartreeFock hfCalculator( 2, basisFunctions );
+  AtomicRCSHartreeFock< double > hfCalculator( 2, params );
   hfCalculator.compute( coreMatrix, twoElectronTerms );
+}
+
+
+TEST( AtomicHartreeFock, Helium_Ochi )
+{
+  int const Z = 2;
+  int const nMax = 2;
+  int const lMax = 1;
+
+  double alpha = 2;
+
+  for( int iter = 0; iter < 4; ++iter )
+  {
+    LVARRAY_LOG_VAR( alpha );
+    
+    std::vector< OchiBasisFunction< double > > basisFunctions;
+    std::vector< AtomicParams > params;
+
+    for( int n = 0; n <= nMax; ++n )
+    {
+      for( int l = 0; l <= lMax; ++l )
+      {
+        for( int m = -l; m <= l; ++m )
+        {
+          basisFunctions.emplace_back( alpha, n, l, m );
+          params.emplace_back( AtomicParams{ n, l, m } );
+        }
+      }
+    }
+
+    IndexType const nBasis = basisFunctions.size();
+
+    Array2d< double > const coreMatrix( nBasis, nBasis );
+    fillCoreMatrix( Z, basisFunctions, coreMatrix );
+    Array4d< std::complex< double > > const twoElectronTerms( nBasis, nBasis, nBasis, nBasis );
+    fillAtomicR12Array( basisFunctions, twoElectronTerms );
+
+    AtomicRCSHartreeFock< double > hfCalculator( 2, params );
+    hfCalculator.compute( coreMatrix, twoElectronTerms );
+
+    alpha = std::sqrt( -2 * hfCalculator.eigenvalues[ 0 ] );
+  }
+
+  LVARRAY_LOG_VAR( alpha );
 }
 
 

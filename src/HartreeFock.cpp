@@ -36,12 +36,13 @@ void constructFockOperator(
   }
 }
 
+template< typename REAL >
 void constructAtomicFockOperator(
-  ArrayView2d< std::complex< double >, 0 > const & fockOperator,
-  ArrayView2d< double const > const & oneElectronTerms,
-  ArrayView4d< std::complex< double > const > const & twoElectronTerms,
-  ArrayView2d< std::complex< double > const > const & density,
-  std::vector< HydrogenLikeBasisFunction< double > > const & basisFunctions )
+  ArrayView2d< std::complex< REAL >, 0 > const & fockOperator,
+  ArrayView2d< REAL const > const & oneElectronTerms,
+  ArrayView4d< std::complex< REAL > const > const & twoElectronTerms,
+  ArrayView2d< std::complex< REAL > const > const & density,
+  std::vector< AtomicParams > const & params )
 {
   TCSCF_MARK_FUNCTION;
 
@@ -52,18 +53,18 @@ void constructAtomicFockOperator(
   {
     for( IndexType v = 0; v < basisSize; ++v )
     {
-      if( basisFunctions[ u ].l != basisFunctions[ v ].l ) continue;
-      if( basisFunctions[ u ].m != basisFunctions[ v ].m ) continue;
+      if( params[ u ].l != params[ v ].l ) continue;
+      if( params[ u ].m != params[ v ].m ) continue;
 
-      std::complex< double > tmp = 0;
+      std::complex< REAL > tmp = 0;
       for( IndexType a = 0; a < basisSize; ++a )
       {
         for( IndexType b = 0; b < basisSize; ++b)
         {
-          if( basisFunctions[ a ].l != basisFunctions[ b ].l ) continue;
-          if( basisFunctions[ a ].m != basisFunctions[ b ].m ) continue;
+          if( params[ a ].l != params[ b ].l ) continue;
+          if( params[ a ].m != params[ b ].m ) continue;
 
-          tmp += density( a, b ) * (twoElectronTerms( u, b, v, a ) - twoElectronTerms( u, b, a, v ) / std::complex< double >{ 2 });
+          tmp += density( a, b ) * (twoElectronTerms( u, b, v, a ) - twoElectronTerms( u, b, a, v ) / 2);
         }
       }
 
@@ -179,50 +180,60 @@ void RCSHartreeFock< T >::compute(
   }
 }
 
-
-void AtomicRCSHartreeFock::compute(
-  ArrayView2d< double const > const & oneElectronTerms,
-  ArrayView4d< std::complex< double > const > const & twoElectronTerms )
+template< typename REAL >
+void AtomicRCSHartreeFock< REAL >::compute(
+  ArrayView2d< REAL const > const & oneElectronTerms,
+  ArrayView4d< std::complex< REAL > const > const & twoElectronTerms )
 {
   TCSCF_MARK_FUNCTION;
 
-  LVARRAY_ERROR_IF_NE( oneElectronTerms.size( 1 ), int( basisFunctions.size() ) );
+  LVARRAY_ERROR_IF_NE( oneElectronTerms.size( 1 ), int( params.size() ) );
 
-  LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 0 ), int( basisFunctions.size() ) );
-  LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 1 ), int( basisFunctions.size() ) );
-  LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 2 ), int( basisFunctions.size() ) );
-  LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 3 ), int( basisFunctions.size() ) );
+  LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 0 ), int( params.size() ) );
+  LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 1 ), int( params.size() ) );
+  LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 2 ), int( params.size() ) );
+  LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 3 ), int( params.size() ) );
 
-  LVARRAY_ERROR_IF_NE( density.size( 0 ), int( basisFunctions.size() ) );
-  LVARRAY_ERROR_IF_NE( density.size( 1 ), int( basisFunctions.size() ) );
+  LVARRAY_ERROR_IF_NE( density.size( 0 ), int( params.size() ) );
+  LVARRAY_ERROR_IF_NE( density.size( 1 ), int( params.size() ) );
 
 
-  std::complex< double > previousEnergy = std::numeric_limits< Real >::max();
+  std::complex< Real > previousEnergy = std::numeric_limits< Real >::max();
 
   for( int iter = 0; iter < 100; ++iter )
   {
-    internal::constructAtomicFockOperator(
+    internal::constructAtomicFockOperator< Real >(
       fockOperator.toView(),
       oneElectronTerms,
       twoElectronTerms,
       density.toViewConst(),
-      basisFunctions );
+      params );
 
-    std::complex< double > const energy = internal::calculateEnergy(
+    std::complex< Real > const energy = internal::calculateEnergy(
       fockOperator.toViewConst(),
       oneElectronTerms,
       density.toViewConst() );
 
-    LVARRAY_LOG_VAR( energy );
     previousEnergy = energy;
 
     hermitianEigendecomposition( fockOperator.toView(), eigenvalues.toView() );
 
     internal::getNewDensity( nElectrons, density, fockOperator.toViewConst() );
   }
+
+  LVARRAY_LOG_VAR( std::real( previousEnergy ) );
 }
 
 // Explicit instantiations.
+
+// TODO: Add support for real matrices
+// template struct RCSHartreeFock< float >;
+// template struct RCSHartreeFock< double>;
+
+template struct RCSHartreeFock< std::complex< float > >;
 template struct RCSHartreeFock< std::complex< double > >;
+
+template struct AtomicRCSHartreeFock< float >;
+template struct AtomicRCSHartreeFock< double >;
 
 } // namespace tcscf

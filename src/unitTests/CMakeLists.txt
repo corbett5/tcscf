@@ -15,7 +15,8 @@ endif()
 set( portedKernel_test_sources
      blasLapackInterfaceTest.cpp
      AtomicBasisTest.cpp
-     HartreeFockTest.cpp )
+     HartreeFockTest.cpp
+     IntegrationTest.cpp )
 
 set( portedKernelTests "" )
 foreach( test ${portedKernel_test_sources} )

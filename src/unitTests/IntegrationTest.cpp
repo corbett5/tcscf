@@ -232,6 +232,7 @@ std::complex< double > integrate(
   HydrogenLikeBasisFunction< double > const & b4 )
 {
   ArrayView2d< double const > const & radialGrid = integrator.m_radialGrid;
+  ArrayView2d< double const > const & radialGrid2 = integrator.m_radialGrid2;
   ArrayView2d< double const > const & angularGrid = integrator.m_angularGrid;
 
   std::complex< double > answer = 0;
@@ -252,11 +253,11 @@ std::complex< double > integrate(
         double const phi2 = angularGrid( 1, k );
 
         double r2Tmp = 0;
-        for( IndexType l = 0; l < radialGrid.size( 1 ); ++l )
+        for( IndexType l = 0; l < radialGrid2.size( 1 ); ++l )
         {
-          double const r2 = radialGrid( 0, l );
+          double const r2 = radialGrid2( 0, l );
           CArray< double, 6 > const R1R2 { r1, theta1, phi1, r2, theta2, phi2 };
-          r2Tmp = r2Tmp + radialGrid( 1, l ) * f( R1R2 ) * b3.radialComponent( r2 ) * b4.radialComponent( r2 ) * std::pow( r2, 2 );
+          r2Tmp = r2Tmp + radialGrid2( 1, l ) * f( R1R2 ) * b3.radialComponent( r2 ) * b4.radialComponent( r2 ) * std::pow( r2, 2 );
         }
 
         innerIntegral = innerIntegral + angularGrid( 2, k ) * r2Tmp * sphericalHarmonic( b3.l, b3.m, theta2, phi2 ) * sphericalHarmonic( b4.l, b4.m, theta2, phi2 );
@@ -277,8 +278,8 @@ TEST( TreutlerAhlrichsLebedev, orthogonal )
   HydrogenLikeBasisFunction< double > b1 { 1, 2, 1, 0 };
   HydrogenLikeBasisFunction< double > b2 { 1, 2, 1, 0 };
 
-  int order = 11;
-  TreutlerAhlrichsLebedev< double > integrator( 1.0, 100, order );
+  int order = 35;
+  TreutlerAhlrichsLebedev< double > integrator( 1.0, 1000, order );
 
   {
     std::complex< double > value = integrate( integrator,
@@ -306,24 +307,22 @@ TEST( r12, TreutlerAhlrichsLebedev )
 
   auto r12Inv = [] ( CArray< double, 6 > const & R1R2 )
   {
-    LVARRAY_UNUSED_VAR( R1R2 );
-    return 0;
-    // double const r12 = calculateR12( R1R2[ 0 ], R1R2[ 1 ], R1R2[ 2 ], R1R2[ 3 ], R1R2[ 4 ], R1R2[ 5 ] );
-    // if( r12 <= 0 )
-    // {
-    //   return 0.0;
-    // }
-    // else
-    // {
-    //   return 1.0 / r12;
-    // }
+    double const r12 = calculateR12( R1R2[ 0 ], R1R2[ 1 ], R1R2[ 2 ], R1R2[ 3 ], R1R2[ 4 ], R1R2[ 5 ] );
+    if( r12 <= 0 )
+    {
+      return 0.0;
+    }
+    else
+    {
+      return 1.0 / r12;
+    }
   };
 
   // int orders[] = {7, 9, 11, 13, 15, 17, 19};
   // int radialSizes[] = {10, 20, 40, 80, 160, 320};
 
-  int orders[] = {35};
-  int radialSizes[] = {10};
+  int orders[] = {19};
+  int radialSizes[] = {100, 200};
 
   for( int order : orders )
   {
@@ -331,6 +330,19 @@ TEST( r12, TreutlerAhlrichsLebedev )
     for( int nRadial : radialSizes )
     {
       TreutlerAhlrichsLebedev< double > integrator( 1.0, nRadial, order );
+      std::complex< double > const value = integrate( integrator, b1, b2, r12Inv, b1, b2 );
+      results.emplace_back( value );
+    }
+
+    LVARRAY_LOG( "Order = " << order << ": " << results );
+  }
+
+  for( int order : orders )
+  {
+    Array1d< std::complex< double > > results;
+    for( int nRadial : radialSizes )
+    {
+      TreutlerAhlrichsLebedev< double > integrator( 1.0, nRadial, nRadial + 5, order );
       std::complex< double > const value = integrate( integrator, b1, b2, r12Inv, b1, b2 );
       results.emplace_back( value );
     }

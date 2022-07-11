@@ -30,6 +30,19 @@ struct TreutlerAhlrichsLebedev
   TreutlerAhlrichsLebedev( Real const epsilon, int const nRadialPoints, int const angularOrder ):
     m_radialGrid(
       createGrid( ChebyshevGauss< Real >( nRadialPoints ), changeOfVariables::TreutlerAhlrichs< Real >( epsilon ) ) ),
+    m_radialGrid2(
+      createGrid( ChebyshevGauss< Real >( nRadialPoints ), changeOfVariables::TreutlerAhlrichs< Real >( epsilon ) ) ),
+    m_angularGrid( createGrid( Lebedev< Real >( angularOrder  ) ) )
+  {}
+
+  /**
+   * 
+   */
+  TreutlerAhlrichsLebedev( Real const epsilon, int const nRadialPoints, int const nRadialPoints2, int const angularOrder ):
+    m_radialGrid(
+      createGrid( ChebyshevGauss< Real >( nRadialPoints ), changeOfVariables::TreutlerAhlrichs< Real >( epsilon ) ) ),
+    m_radialGrid2(
+      createGrid( ChebyshevGauss< Real >( nRadialPoints2 ), changeOfVariables::TreutlerAhlrichs< Real >( epsilon ) ) ),
     m_angularGrid( createGrid( Lebedev< Real >( angularOrder  ) ) )
   {}
 
@@ -40,6 +53,7 @@ struct TreutlerAhlrichsLebedev
   { return m_radialGrid.size( 1 ) * m_angularGrid.size( 1 ); }
 
   Array2d< Real > const m_radialGrid;
+  Array2d< Real > const m_radialGrid2;
   Array2d< Real > const m_angularGrid;
 };
 

@@ -60,7 +60,7 @@ constexpr REAL calculateR12(
 {
   REAL r12 = std::pow( r1, 2 ) + std::pow( r2, 2 );
   r12 -= 2 * r1 * r2 * (std::sin( theta1 ) * std::sin( theta2 ) * std::cos( phi1  - phi2 ) + std::cos( theta1 ) * std::cos( theta2 ));
-  return std::sqrt( r12 );
+  return std::sqrt( std::abs( r12 ) );
 }
 
 /**

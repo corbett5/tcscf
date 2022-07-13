@@ -308,47 +308,49 @@ TEST( r12, TreutlerAhlrichsLebedev )
   auto r12Inv = [] ( CArray< double, 6 > const & R1R2 )
   {
     double const r12 = calculateR12( R1R2[ 0 ], R1R2[ 1 ], R1R2[ 2 ], R1R2[ 3 ], R1R2[ 4 ], R1R2[ 5 ] );
-    if( r12 <= 0 )
-    {
-      return 0.0;
-    }
-    else
-    {
-      return 1.0 / r12;
-    }
+    // if( r12 <= 0 )
+    // {
+    //   return 0.0;
+    // }
+    // else
+    // {
+    //   return 1.0 / r12;
+    // }
+    return std::exp( -r12 );
   };
 
-  // int orders[] = {7, 9, 11, 13, 15, 17, 19};
-  // int radialSizes[] = {10, 20, 40, 80, 160, 320};
+  int orders[] = {19, 21, 23, 25, 27, 29, 31};
+  int radialSizes[] = {10, 20, 40, 80};
 
-  int orders[] = {19};
-  int radialSizes[] = {100, 200};
-
-  for( int order : orders )
-  {
-    Array1d< std::complex< double > > results;
-    for( int nRadial : radialSizes )
-    {
-      TreutlerAhlrichsLebedev< double > integrator( 1.0, nRadial, order );
-      std::complex< double > const value = integrate( integrator, b1, b2, r12Inv, b1, b2 );
-      results.emplace_back( value );
-    }
-
-    LVARRAY_LOG( "Order = " << order << ": " << results );
-  }
+  // int orders[] = {7};
+  // int radialSizes[] = {100, 200};
 
   for( int order : orders )
   {
     Array1d< std::complex< double > > results;
     for( int nRadial : radialSizes )
     {
-      TreutlerAhlrichsLebedev< double > integrator( 1.0, nRadial, nRadial + 5, order );
+      TreutlerAhlrichsLebedev< double > integrator( 0.8, nRadial, order );
       std::complex< double > const value = integrate( integrator, b1, b2, r12Inv, b1, b2 );
       results.emplace_back( value );
     }
 
     LVARRAY_LOG( "Order = " << order << ": " << results );
+    // 0.0201615 \pm 0.0000821921
   }
+
+  // for( int order : orders )
+  // {
+  //   Array1d< std::complex< double > > results;
+  //   for( int nRadial : radialSizes )
+  //   {
+  //     TreutlerAhlrichsLebedev< double > integrator( 1.0, nRadial, nRadial + 5, order );
+  //     std::complex< double > const value = integrate( integrator, b1, b2, r12Inv, b1, b2 );
+  //     results.emplace_back( value );
+  //   }
+
+  //   LVARRAY_LOG( "Order = " << order << ": " << results );
+  // }
 }
 
 TEST( r12, qmc )

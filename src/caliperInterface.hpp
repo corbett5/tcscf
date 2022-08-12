@@ -2,9 +2,9 @@
 
 #include "Macros.hpp"
 
-#include <memory>
-
 #include <caliper/cali.h>
+
+#include <memory>
 
 /// Mark a function or scope for timing with a given name
 #define TCSCF_MARK_SCOPE( name ) cali::Function __cali_ann##__LINE__( STRINGIZE_NX( name ) )

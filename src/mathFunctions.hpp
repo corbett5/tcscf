@@ -1,5 +1,7 @@
 #pragma once
 
+#include "LvArrayInterface.hpp"
+
 // #define STD_SPECIAL_FUNCTIONS
 
 #if defined( STD_SPECIAL_FUNCTIONS )
@@ -121,6 +123,23 @@ T assocLaguerre( int const n, int const k, T const x )
 #else
   return boost::math::laguerre( n, k, x );
 #endif
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// Coordinate transformations
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ *
+ */
+template< typename T >
+constexpr CArray< T, 3 > sphericalToCartesian( T const r, T const theta, T const phi )
+{
+  T const x = r * std::cos( phi ) * std::sin( theta );
+  T const y = r * std::sin( phi ) * std::sin( theta );
+  T const z = r * std::cos( theta );
+
+  return { x, y, z };
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

@@ -94,6 +94,17 @@ constexpr std::int64_t truncatedFactorial( int const max, int const min )
  * 
  */
 template< typename T >
+constexpr std::complex< T > cExp( T const theta )
+{
+  T s, c;
+  LvArray::math::sincos( theta, s, c );
+  return { c, s };
+}
+
+/**
+ * 
+ */
+template< typename T >
 T sphericalHarmonicMagnitude( int const l, int const m, T const theta )
 {
   return std::sph_legendre( l, std::abs( m ), theta );
@@ -106,7 +117,7 @@ template< typename T >
 std::complex< T > sphericalHarmonic( int const l, int const m, T const theta, T const phi )
 {
 #if defined( STD_SPECIAL_FUNCTIONS )
-  return sphericalHarmonicMagnitude( l, m, theta ) * std::exp( I< T > * m * phi );
+  return sphericalHarmonicMagnitude( l, m, theta ) * cExp( m * phi );
 #else
   return boost::math::spherical_harmonic( l, m, theta, phi );
 #endif

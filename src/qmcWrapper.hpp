@@ -51,12 +51,18 @@ struct FunctionInfo< RET ( CLASS:: * ) ( ARG0, ARGS ... ) const >
 /**
  * 
  */
+template< typename FUNCTOR >
+using FunctorInfo = FunctionInfo< decltype( &std::remove_reference_t< FUNCTOR >::operator() ) >;
+
+/**
+ * 
+ */
 template< typename F >
 struct Functor
 {
-  using RETURN_TYPE = typename FunctionInfo< decltype( &F::operator() )>::RETURN_TYPE;
-  using ARG_TYPE = typename FunctionInfo< decltype( &F::operator() )>::ARG_TYPE;
-  static constexpr int NARGS = FunctionInfo< decltype( &F::operator() )>::NARGS;
+  using RETURN_TYPE = typename FunctorInfo< F >::RETURN_TYPE;
+  using ARG_TYPE = typename FunctorInfo< F >::ARG_TYPE;
+  static constexpr int NARGS = FunctorInfo< F >::NARGS;
   static constexpr unsigned long long int number_of_integration_variables = NARGS;
 
   template< int _NARGS = NARGS >
@@ -89,14 +95,12 @@ auto createFunctor( F && f )
 /**
  * 
  */
-template< typename F >
-auto sphericalCoordinates3DIntegral( F && f )
+template< typename INTEGRATOR, typename F >
+auto sphericalCoordinates3DIntegral( INTEGRATOR & integrator, F && f )
 {
-  using FMetaData = internal::FunctionInfo< decltype( &F::operator() ) >;
-  using RETURN_TYPE = typename FMetaData::RETURN_TYPE;
-  using COORD_TYPE = typename FMetaData::ARG_TYPE;
+  using COORD_TYPE = typename internal::FunctorInfo< F >::ARG_TYPE;
 
-  static_assert( FMetaData::NARGS == 3 );
+  static_assert( internal::FunctorInfo< F >::NARGS == 3 );
 
   auto integrand = [f = std::forward< F >( f )] ( COORD_TYPE const xR, COORD_TYPE const xTheta, COORD_TYPE const xPhi )
   {
@@ -108,9 +112,21 @@ auto sphericalCoordinates3DIntegral( F && f )
 
   auto const functor = internal::createFunctor( std::move( integrand ) );
 
-  integrators::Qmc< RETURN_TYPE, COORD_TYPE, 3, integrators::transforms::None::type > integrator;
   auto const result = integrator.integrate( functor );
   return 2 * std::pow( pi< COORD_TYPE >, 2 ) * result.integral;
+}
+
+/**
+ * 
+ */
+template< typename F >
+auto sphericalCoordinates3DIntegral( F && f )
+{
+  using RETURN_TYPE = typename internal::FunctorInfo< F >::RETURN_TYPE;
+  using COORD_TYPE = typename internal::FunctorInfo< F >::ARG_TYPE;
+
+  integrators::Qmc< RETURN_TYPE, COORD_TYPE, 3, integrators::transforms::None::type > integrator;
+  return sphericalCoordinates3DIntegral( integrator, std::forward< F >( f ) );
 }
 
 /**
@@ -119,11 +135,10 @@ auto sphericalCoordinates3DIntegral( F && f )
 template< typename F >
 auto sphericalCoordinates5DIntegral( F && f )
 {
-  using FMetaData = internal::FunctionInfo< decltype( &F::operator() )>;
-  using RETURN_TYPE = typename FMetaData::RETURN_TYPE;
-  using COORD_TYPE = typename FMetaData::ARG_TYPE;
+  using RETURN_TYPE = typename internal::FunctorInfo< F >::RETURN_TYPE;
+  using COORD_TYPE = typename internal::FunctorInfo< F >::ARG_TYPE;
 
-  static_assert( FMetaData::NARGS == 5 );
+  static_assert( internal::FunctorInfo< F >::NARGS == 5 );
 
   auto const functor = internal::createFunctor( [f = std::forward< F >( f )]
     ( COORD_TYPE const xR1, COORD_TYPE const xTheta1, COORD_TYPE const xPhi1,
@@ -158,11 +173,10 @@ auto sphericalCoordinates5DIntegral( F && f )
 template< typename F >
 auto sphericalCoordinates6DIntegral( F && f )
 {
-  using FMetaData = internal::FunctionInfo< decltype( &F::operator() )>;
-  using RETURN_TYPE = typename FMetaData::RETURN_TYPE;
-  using COORD_TYPE = typename FMetaData::ARG_TYPE;
+  using RETURN_TYPE = typename internal::FunctorInfo< F >::RETURN_TYPE;
+  using COORD_TYPE = typename internal::FunctorInfo< F >::ARG_TYPE;
 
-  static_assert( FMetaData::NARGS == 6 );
+  static_assert( internal::FunctorInfo< F >::NARGS == 6 );
 
   auto const functor = internal::createFunctor( [f = std::forward< F >( f )]
     ( COORD_TYPE const xR1, COORD_TYPE const xTheta1, COORD_TYPE const xPhi1,

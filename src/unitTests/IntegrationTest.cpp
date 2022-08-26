@@ -309,7 +309,7 @@ std::complex< double > integrateR12(
 
       CArray< double, 3 > const xyz1 = sphericalToCartesian( r1, theta1, phi1 );
 
-      std::complex< double > innerIntegral = 0;
+      double innerIntegral = 0;
       for( IndexType a12Idx = 0; a12Idx < angularGrid.size( 1 ); ++a12Idx )
       {
         double const theta12 = angularGrid( 0, a12Idx );
@@ -329,15 +329,15 @@ std::complex< double > integrateR12(
 
           double const r2 = std::hypot( x2, y2, z2 );
           double const theta2 = std::acos( z2 / (r2 + std::numeric_limits< double >::epsilon()) );
-          double const phi2 = std::atan2( y2, x2 );
+          // Here we set phi2 to be zero because of an assumed symmetry of the orbitals.
 
           double const weight = weightR12 * weightA12;
           double const jacobianOverR12 = r12;
           
           double const r2Value = b2.radialComponent( r2 ) * b4.radialComponent( r2 );
-          std::complex< double > const a2Value = conj( sphericalHarmonic( b2.l, b2.m, theta2, phi2 ) ) * sphericalHarmonic( b4.l, b4.m, theta2, phi2 );
+          double const a2ValueMagnitude = sphericalHarmonicMagnitude( b2.l, b2.m, theta2 ) * sphericalHarmonicMagnitude( b4.l, b4.m, theta2 );
 
-          innerIntegral = innerIntegral + weight * r2Value * a2Value * jacobianOverR12;
+          innerIntegral = innerIntegral + weight * r2Value * a2ValueMagnitude * jacobianOverR12;
         }
       }
 
@@ -348,6 +348,52 @@ std::complex< double > integrateR12(
       std::complex< double > const a1Value = conj( sphericalHarmonic( b1.l, b1.m, theta1, phi1 ) ) * sphericalHarmonic( b3.l, b3.m, theta1, phi1 );
 
       answer += innerIntegral * weight * a1Value * r1Value * jacobian;
+    }
+  } );
+
+  return answer.get();
+}
+
+
+std::complex< double > hybridIntegral(
+  TreutlerAhlrichsLebedev< double > const & integrator,
+  HydrogenLikeBasisFunction< double > const & b1,
+  HydrogenLikeBasisFunction< double > const & b2,
+  HydrogenLikeBasisFunction< double > const & b3,
+  HydrogenLikeBasisFunction< double > const & b4 )
+{
+  using PolicyType = ParallelHost;
+
+  ArrayView2d< double const > const & radialGrid = integrator.m_radialGrid;
+  ArrayView2d< double const > const & angularGrid = integrator.m_angularGrid;
+
+
+  RAJA::ReduceSum< Reduce< PolicyType >, std::complex< double > > answer( 0 );
+  
+  forAll< DefaultPolicy< PolicyType > >( angularGrid.size( 1 ), [=] ( IndexType const a1Idx )
+  {
+    integrators::Qmc< std::complex< double >, double, 3, integrators::transforms::None::type > qmcIntegrator;
+    qmcIntegrator.cputhreads = 1;
+    qmcIntegrator.evaluateminn = 100;
+    qmcIntegrator.maxeval = 1000;
+
+    double const theta1 = angularGrid( 0, a1Idx );
+    double const phi1 = angularGrid( 1, a1Idx ); double const weightA1 = angularGrid( 2, a1Idx );
+
+    for( IndexType r1Idx = 0; r1Idx < radialGrid.size( 1 ); ++r1Idx )
+    {
+      double const r1 = radialGrid( 0, r1Idx );
+      double const weightR1 = radialGrid( 1, r1Idx );
+
+      std::complex< double > const innerIntegral = qmc::sphericalCoordinates3DIntegral( qmcIntegrator,
+        [=] ( double const r2, double const theta2, double const phi2 )
+        {
+          double const r12Inv = 1.0 / calculateR12( r1, theta1, phi1, r2, theta2, phi2 );
+          return conj( b2( r2, theta2, phi2 ) ) * r12Inv * b4( r2, theta2, phi2 );
+        }
+      );
+
+      answer += weightA1 * weightR1 * conj( b1( r1, theta1, phi1 ) ) * innerIntegral * b3( r1, theta1, phi1 ) * std::pow( r1, 2 );
     }
   } );
 
@@ -533,29 +579,43 @@ TEST( r12, first )
 TEST( r12, second )
 {
   std::vector< CArray< int, 2 > > standardParams = {
-    { 9, 50 },
-    { 9, 100 },
-    { 11, 50 },
-    { 11, 100 },
-    { 13, 50 },
-    { 13, 100 },
-    { 15, 50 },
-    { 15, 100 },
-    { 17, 50 },
-    { 17, 100 },
+    // { 9, 50 },
+    // { 9, 100 },
+    // { 11, 50 },
+    // { 11, 100 },
+    // { 13, 50 },
+    // { 13, 100 },
+    // { 15, 50 },
+    // { 15, 100 },
+    // { 17, 50 },
+    // { 17, 100 },
   };
 
   std::vector< CArray< int, 2 > > dualParams = {
-    { 9, 50 },
-    { 9, 100 },
-    { 11, 50 },
-    { 11, 100 },
-    { 13, 50 },
-    { 13, 100 },
-    { 15, 50 },
-    { 15, 100 },
+    { 17, 10 },
+    { 17, 25 },
     { 17, 50 },
     { 17, 100 },
+    { 19, 10 },
+    { 19, 25 },
+    { 19, 50 },
+    { 19, 100 },
+    { 21, 10 },
+    { 21, 25 },
+    { 21, 50 },
+    { 21, 100 },
+    { 23, 10 },
+    { 23, 25 },
+    { 23, 50 },
+    { 23, 100 },
+    { 25, 10 },
+    { 25, 25 },
+    { 25, 50 },
+    { 25, 100 },
+    // { 15, 50 },
+    // { 15, 100 },
+    // { 17, 50 },
+    // { 17, 100 },
   };
 
   HydrogenLikeBasisFunction< double > b1 { 1, 2, 1, 0 };

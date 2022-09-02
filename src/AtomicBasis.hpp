@@ -356,7 +356,7 @@ void fillAtomicR12Array(
 
   fillTwoElectronSymmetricHermitianArray( array, false,
     [&basisFunctions, &numEval] ( int const a, int const b, int const c, int const d )
-    {
+    {j
       if( basisFunctions[ a ].l == basisFunctions[ c ].l &&
           basisFunctions[ a ].m == basisFunctions[ c ].m &&
           basisFunctions[ b ].l == basisFunctions[ d ].l &&
@@ -395,9 +395,11 @@ void fillAtomicR12Array(
 
   integration::TreutlerAhlrichsLebedev< Real > grid( epsilon, nRadial, angularOrder );
 
+  int numEval = 0;
+
   fillTwoElectronSymmetricHermitianArray( array, true,
-    [&basisFunctions, &grid] ( int const a, int const b, int const c, int const d )
-    {
+    [&basisFunctions, &grid, &numEval] ( int const a, int const b, int const c, int const d )
+    {      
       if( ( basisFunctions[ a ].l == basisFunctions[ c ].l &&
             basisFunctions[ a ].m == basisFunctions[ c ].m &&
             basisFunctions[ b ].l == basisFunctions[ d ].l &&
@@ -407,6 +409,7 @@ void fillAtomicR12Array(
             basisFunctions[ b ].l == basisFunctions[ c ].l &&
             basisFunctions[ b ].m == basisFunctions[ c ].m ) )
       {
+        ++numEval;
         return integrateR1R12( grid, basisFunctions[ a ], basisFunctions[ b ], basisFunctions[ c ], basisFunctions[ d ],
           [] ( Real const LVARRAY_UNUSED_ARG( r1 ), Real const LVARRAY_UNUSED_ARG( r2 ), Real const r12 )
           { return 1.0 / r12; }

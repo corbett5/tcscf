@@ -5,6 +5,8 @@
 #include "qmcWrapper.hpp"
 #include "mathFunctions.hpp"
 
+#include "integration/TreutlerAhlrichsLebedev.hpp"
+
 #include <iostream>
 
 namespace tcscf
@@ -334,14 +336,17 @@ void fillAtomicR12Array(
 {
   using Real = typename BASIS::Real;
 
+  int numEval = 0;
+
   fillTwoElectronSymmetricHermitianArray( array, true,
-    [&basisFunctions] ( int const a, int const b, int const c, int const d )
+    [&basisFunctions, &numEval] ( int const a, int const b, int const c, int const d )
     {
       if( basisFunctions[ a ].l == basisFunctions[ c ].l &&
           basisFunctions[ a ].m == basisFunctions[ c ].m &&
           basisFunctions[ b ].l == basisFunctions[ d ].l &&
           basisFunctions[ b ].m == basisFunctions[ d ].m )
       {
+        ++numEval;
         return std::complex< Real >{ atomicCoulombOperator( basisFunctions[ a ], basisFunctions[ b ], basisFunctions[ c ], basisFunctions[ d ] ) };
       }
       
@@ -350,7 +355,7 @@ void fillAtomicR12Array(
   );
 
   fillTwoElectronSymmetricHermitianArray( array, false,
-    [&basisFunctions] ( int const a, int const b, int const c, int const d )
+    [&basisFunctions, &numEval] ( int const a, int const b, int const c, int const d )
     {
       if( basisFunctions[ a ].l == basisFunctions[ c ].l &&
           basisFunctions[ a ].m == basisFunctions[ c ].m &&
@@ -365,6 +370,7 @@ void fillAtomicR12Array(
           basisFunctions[ b ].l == basisFunctions[ c ].l &&
           basisFunctions[ b ].m == basisFunctions[ c ].m )
       {
+        ++numEval;
         return atomicExchangeOperator(
           basisFunctions[ a ],
           basisFunctions[ b ],
@@ -372,6 +378,41 @@ void fillAtomicR12Array(
           basisFunctions[ d ] );
       }
 
+      return std::complex< Real >{ 0 };
+    }
+  );
+}
+
+template< typename BASIS, typename T >
+void fillAtomicR12Array(
+  double const epsilon,
+  int const nRadial,
+  int const angularOrder,
+  std::vector< BASIS > const & basisFunctions,
+  ArrayView4d< T > const & array )
+{
+  using Real = typename BASIS::Real;
+
+  integration::TreutlerAhlrichsLebedev< Real > grid( epsilon, nRadial, angularOrder );
+
+  fillTwoElectronSymmetricHermitianArray( array, true,
+    [&basisFunctions, &grid] ( int const a, int const b, int const c, int const d )
+    {
+      if( ( basisFunctions[ a ].l == basisFunctions[ c ].l &&
+            basisFunctions[ a ].m == basisFunctions[ c ].m &&
+            basisFunctions[ b ].l == basisFunctions[ d ].l &&
+            basisFunctions[ b ].m == basisFunctions[ d ].m ) ||
+          ( basisFunctions[ a ].l == basisFunctions[ d ].l &&
+            basisFunctions[ a ].m == basisFunctions[ d ].m &&
+            basisFunctions[ b ].l == basisFunctions[ c ].l &&
+            basisFunctions[ b ].m == basisFunctions[ c ].m ) )
+      {
+        return integrateR1R12( grid, basisFunctions[ a ], basisFunctions[ b ], basisFunctions[ c ], basisFunctions[ d ],
+          [] ( Real const LVARRAY_UNUSED_ARG( r1 ), Real const LVARRAY_UNUSED_ARG( r2 ), Real const r12 )
+          { return 1.0 / r12; }
+        );
+      }
+      
       return std::complex< Real >{ 0 };
     }
   );

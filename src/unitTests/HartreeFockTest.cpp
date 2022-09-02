@@ -47,7 +47,7 @@ TEST( AtomicHartreeFock, Helium )
 TEST( AtomicHartreeFock, Helium_Ochi )
 {
   int const Z = 2;
-  int const nMax = 2;
+  int const nMax = 1;
   int const lMax = 1;
 
   double alpha = 2;
@@ -72,10 +72,12 @@ TEST( AtomicHartreeFock, Helium_Ochi )
     }
 
     IndexType const nBasis = basisFunctions.size();
+    LVARRAY_LOG_VAR( nBasis );
 
     Array2d< double > const coreMatrix( nBasis, nBasis );
     fillCoreMatrix( Z, basisFunctions, coreMatrix );
     Array4d< std::complex< double > > const twoElectronTerms( nBasis, nBasis, nBasis, nBasis );
+    // fillAtomicR12Array( 0.9, 50, 11, basisFunctions, twoElectronTerms );
     fillAtomicR12Array( basisFunctions, twoElectronTerms );
 
     AtomicRCSHartreeFock< double > hfCalculator( 2, params );

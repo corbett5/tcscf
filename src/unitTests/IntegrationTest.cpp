@@ -225,182 +225,6 @@ std::complex< double > integrate(
 }
 
 
-template< typename F >
-std::complex< double > integrate(
-  TreutlerAhlrichsLebedev< double > const & integrator,
-  HydrogenLikeBasisFunction< double > const & b1,
-  HydrogenLikeBasisFunction< double > const & b2,
-  F && f,
-  HydrogenLikeBasisFunction< double > const & b3,
-  HydrogenLikeBasisFunction< double > const & b4 )
-{
-  using PolicyType = ParallelHost;
-
-  ArrayView2d< double const > const & radialGrid = integrator.m_radialGrid;
-  ArrayView2d< double const > const & angularGrid = integrator.m_angularGrid;
-
-
-  RAJA::ReduceSum< Reduce< PolicyType >, std::complex< double > > answer( 0 );
-  
-  forAll< DefaultPolicy< PolicyType > >( angularGrid.size( 1 ), [=] ( IndexType const a1Idx )
-  {
-    double const theta1 = angularGrid( 0, a1Idx );
-    double const phi1 = angularGrid( 1, a1Idx );
-    double const weightA1 = angularGrid( 2, a1Idx );
-
-    for( IndexType r1Idx = 0; r1Idx < radialGrid.size( 1 ); ++r1Idx )
-    {
-      double const r1 = radialGrid( 0, r1Idx );
-      double const weightR1 = radialGrid( 1, r1Idx );
-
-      for( IndexType a2Idx = 0; a2Idx < angularGrid.size( 1 ); ++a2Idx )
-      {
-        double const theta2 = angularGrid( 0, a2Idx );
-        double const phi2 = angularGrid( 1, a2Idx );
-        double const weightA2 = angularGrid( 2, a2Idx );
-
-        double r2Sum = 0;
-        for( IndexType r2Idx = 0; r2Idx < radialGrid.size( 1 ); ++r2Idx )
-        {
-          double const r2 = radialGrid( 0, r2Idx );
-          double const weightR2 = radialGrid( 1, r2Idx );
-
-          CArray< double, 6 > const R1R2 { r1, theta1, phi1, r2, theta2, phi2 };
-          r2Sum = r2Sum + weightR2 * b2.radialComponent( r2 ) * b4.radialComponent( r2 ) * f( R1R2 ) * std::pow( r2, 2 );
-        }
-
-        auto const a1Value = conj( sphericalHarmonic( b1.l, b1.m, theta1, phi1 ) ) * sphericalHarmonic( b3.l, b3.m, theta1, phi1 );
-        auto const r1Value = b1.radialComponent( r1 ) * b3.radialComponent( r1 );
-        auto const a2Value = conj( sphericalHarmonic( b2.l, b2.m, theta2, phi2 ) ) * sphericalHarmonic( b4.l, b4.m, theta2, phi2 );
-
-        answer += weightA2 * weightR1 * weightA1 * r2Sum * a1Value * r1Value * a2Value * std::pow( r1, 2 );
-      }
-    }
-  } );
-
-  return answer.get();
-}
-
-
-std::complex< double > integrateR12(
-  TreutlerAhlrichsLebedev< double > const & integrator,
-  HydrogenLikeBasisFunction< double > const & b1,
-  HydrogenLikeBasisFunction< double > const & b2,
-  HydrogenLikeBasisFunction< double > const & b3,
-  HydrogenLikeBasisFunction< double > const & b4 )
-{
-  using PolicyType = ParallelHost;
-
-  ArrayView2d< double const > const & radialGrid = integrator.m_radialGrid;
-  ArrayView2d< double const > const & angularGrid = integrator.m_angularGrid;
-
-  RAJA::ReduceSum< Reduce< PolicyType >, std::complex< double > > answer( 0 );
-  
-  forAll< DefaultPolicy< PolicyType > >( angularGrid.size( 1 ), [=] ( IndexType const a1Idx )
-  {
-    double const theta1 = angularGrid( 0, a1Idx );
-    double const phi1 = angularGrid( 1, a1Idx );
-    double const weightA1 = angularGrid( 2, a1Idx );
-
-    for( IndexType r1Idx = 0; r1Idx < radialGrid.size( 1 ); ++r1Idx )
-    {
-      double const r1 = radialGrid( 0, r1Idx );
-      double const weightR1 = radialGrid( 1, r1Idx );
-
-      CArray< double, 3 > const xyz1 = sphericalToCartesian( r1, theta1, phi1 );
-
-      double innerIntegral = 0;
-      for( IndexType a12Idx = 0; a12Idx < angularGrid.size( 1 ); ++a12Idx )
-      {
-        double const theta12 = angularGrid( 0, a12Idx );
-        double const phi12 = angularGrid( 1, a12Idx );
-        double const weightA12 = angularGrid( 2, a12Idx );
-
-        for( IndexType r12Idx = 0; r12Idx < radialGrid.size( 1 ); ++r12Idx )
-        {
-          double const r12 = radialGrid( 0, r12Idx );
-          double const weightR12 = radialGrid( 1, r12Idx );
-
-          CArray< double, 3 > const xyz12 = sphericalToCartesian( r12, theta12, phi12 );
-          
-          double const x2 = xyz1[ 0 ] + xyz12[ 0 ];
-          double const y2 = xyz1[ 1 ] + xyz12[ 1 ];
-          double const z2 = xyz1[ 2 ] + xyz12[ 2 ];
-
-          double const r2 = std::hypot( x2, y2, z2 );
-          double const theta2 = std::acos( z2 / (r2 + std::numeric_limits< double >::epsilon()) );
-          // Here we set phi2 to be zero because of an assumed symmetry of the orbitals.
-
-          double const weight = weightR12 * weightA12;
-          double const jacobianOverR12 = r12;
-          
-          double const r2Value = b2.radialComponent( r2 ) * b4.radialComponent( r2 );
-          double const a2ValueMagnitude = sphericalHarmonicMagnitude( b2.l, b2.m, theta2 ) * sphericalHarmonicMagnitude( b4.l, b4.m, theta2 );
-
-          innerIntegral = innerIntegral + weight * r2Value * a2ValueMagnitude * jacobianOverR12;
-        }
-      }
-
-      double const weight = weightR1 * weightA1;
-      double const jacobian = std::pow( r1, 2 );
-
-      double const r1Value = b1.radialComponent( r1 ) * b3.radialComponent( r1 );
-      std::complex< double > const a1Value = conj( sphericalHarmonic( b1.l, b1.m, theta1, phi1 ) ) * sphericalHarmonic( b3.l, b3.m, theta1, phi1 );
-
-      answer += innerIntegral * weight * a1Value * r1Value * jacobian;
-    }
-  } );
-
-  return answer.get();
-}
-
-
-std::complex< double > hybridIntegral(
-  TreutlerAhlrichsLebedev< double > const & integrator,
-  HydrogenLikeBasisFunction< double > const & b1,
-  HydrogenLikeBasisFunction< double > const & b2,
-  HydrogenLikeBasisFunction< double > const & b3,
-  HydrogenLikeBasisFunction< double > const & b4 )
-{
-  using PolicyType = ParallelHost;
-
-  ArrayView2d< double const > const & radialGrid = integrator.m_radialGrid;
-  ArrayView2d< double const > const & angularGrid = integrator.m_angularGrid;
-
-
-  RAJA::ReduceSum< Reduce< PolicyType >, std::complex< double > > answer( 0 );
-  
-  forAll< DefaultPolicy< PolicyType > >( angularGrid.size( 1 ), [=] ( IndexType const a1Idx )
-  {
-    integrators::Qmc< std::complex< double >, double, 3, integrators::transforms::None::type > qmcIntegrator;
-    qmcIntegrator.cputhreads = 1;
-    qmcIntegrator.evaluateminn = 100;
-    qmcIntegrator.maxeval = 1000;
-
-    double const theta1 = angularGrid( 0, a1Idx );
-    double const phi1 = angularGrid( 1, a1Idx ); double const weightA1 = angularGrid( 2, a1Idx );
-
-    for( IndexType r1Idx = 0; r1Idx < radialGrid.size( 1 ); ++r1Idx )
-    {
-      double const r1 = radialGrid( 0, r1Idx );
-      double const weightR1 = radialGrid( 1, r1Idx );
-
-      std::complex< double > const innerIntegral = qmc::sphericalCoordinates3DIntegral( qmcIntegrator,
-        [=] ( double const r2, double const theta2, double const phi2 )
-        {
-          double const r12Inv = 1.0 / calculateR12( r1, theta1, phi1, r2, theta2, phi2 );
-          return conj( b2( r2, theta2, phi2 ) ) * r12Inv * b4( r2, theta2, phi2 );
-        }
-      );
-
-      answer += weightA1 * weightR1 * conj( b1( r1, theta1, phi1 ) ) * innerIntegral * b3( r1, theta1, phi1 ) * std::pow( r1, 2 );
-    }
-  } );
-
-  return answer.get();
-}
-
-
 TEST( TreutlerAhlrichsLebedev, orthogonal )
 {
   HydrogenLikeBasisFunction< double > b1 { 1, 2, 1, 0 };
@@ -449,7 +273,7 @@ TEST( TreutlerAhlrichsLebedev, orthongonal2 )
     for( int nRadial : radialSizes )
     {
       TreutlerAhlrichsLebedev< double > integrator( 0.8, nRadial, order );
-      std::complex< double > const value = integrate( integrator, b1, b2, identity, b3, b4 );
+      std::complex< double > const value = integrateR1R2( integrator, b1, b2, b3, b4, identity );
       results.emplace_back( value );
     }
 
@@ -493,13 +317,13 @@ void testDifferentMethods(
 
     auto const t0 = std::chrono::steady_clock::now();
     TreutlerAhlrichsLebedev< double > integrator( 0.8, nRadial, order );
-    std::complex< double > const value = integrate( integrator, b1, b2, r12Inv, b3, b4 );
+    std::complex< double > const value = integrateR1R2( integrator, b1, b2, b3, b4, r12Inv );
     std::chrono::duration< double > const tElapsed = std::chrono::steady_clock::now() - t0;
 
     double const diff = std::abs( value - expectedValue );
     double const rdiff = diff / std::abs( expectedValue );
     char const * const inBounds = diff < error ? "true" : "false";
-    printf( formatString, "Standard integration", order, nRadial, value.real(), value.imag(), diff, inBounds, rdiff, tElapsed.count() );
+    printf( formatString, "r1r2", order, nRadial, value.real(), value.imag(), diff, inBounds, rdiff, tElapsed.count() );
   }
 
   for( CArray< int, 2 > const & params : dualParams )
@@ -509,14 +333,13 @@ void testDifferentMethods(
 
     auto const t0 = std::chrono::steady_clock::now();
     TreutlerAhlrichsLebedev< double > integrator( 0.8, nRadial, order );
-    std::complex< double > const value = integrateR12( integrator, b1, b2, b3, b4 );
+    std::complex< double > const value = integrateR1R12( integrator, b1, b2, b3, b4, [] ( double, double, double const r12 ) { return 1.0 / r12; } );
     std::chrono::duration< double > const tElapsed = std::chrono::steady_clock::now() - t0;
-
 
     double const diff = std::abs( value - expectedValue );
     double const rdiff = diff / std::abs( expectedValue );
     char const * const inBounds = diff < error ? "true" : "false";
-    printf( formatString, "Dual expansion", order, nRadial, value.real(), value.imag(), diff, inBounds, rdiff, tElapsed.count() );
+    printf( formatString, "r1r12", order, nRadial, value.real(), value.imag(), diff, inBounds, rdiff, tElapsed.count() );
   }
 
   std::complex< double > value = 0;

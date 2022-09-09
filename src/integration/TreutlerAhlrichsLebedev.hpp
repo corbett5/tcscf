@@ -37,6 +37,9 @@ struct TreutlerAhlrichsLebedev
   Array2d< Real > const m_angularGrid;
 };
 
+/**
+ *
+ */ 
 template< typename REAL, typename F >
 auto integrate(
   TreutlerAhlrichsLebedev< REAL > const & integrator,
@@ -65,6 +68,9 @@ auto integrate(
   return answer;
 }
 
+/**
+ * 
+ */
 template< typename T, typename ATOMIC_BASIS, typename F >
 std::complex< T > integrateR1R2(
   TreutlerAhlrichsLebedev< T > const & integrator,
@@ -123,6 +129,55 @@ std::complex< T > integrateR1R2(
 }
 
 template< typename T, typename ATOMIC_BASIS, typename F >
+T evaluateR12Integral(
+  ArrayView2d< T const > const & radialGrid,
+  ArrayView2d< T const > const & angularGrid,
+  T const r1,
+  CArray< T, 3 > const xyz1,
+  ATOMIC_BASIS const & b2,
+  ATOMIC_BASIS const & b4,
+  F && f )
+{
+  T r12Integral = 0;
+  for( IndexType a12Idx = 0; a12Idx < angularGrid.size( 1 ); ++a12Idx )
+  {
+    T const theta12 = angularGrid( 0, a12Idx );
+    T const phi12 = angularGrid( 1, a12Idx );
+    T const weightA12 = angularGrid( 2, a12Idx );
+
+    for( IndexType r12Idx = 0; r12Idx < radialGrid.size( 1 ); ++r12Idx )
+    {
+      T const r12 = radialGrid( 0, r12Idx );
+      T const weightR12 = radialGrid( 1, r12Idx );
+
+      CArray< T, 3 > const xyz12 = sphericalToCartesian( r12, theta12, phi12 );
+      
+      T const x2 = xyz1[ 0 ] + xyz12[ 0 ];
+      T const y2 = xyz1[ 1 ] + xyz12[ 1 ];
+      T const z2 = xyz1[ 2 ] + xyz12[ 2 ];
+
+      T const r2 = std::hypot( x2, y2, z2 );
+      T const theta2 = std::acos( z2 / (r2 + std::numeric_limits< T >::epsilon()) );
+      // Here we set phi2 to be zero because of an assumed symmetry of the orbitals.
+
+      T const weight = weightR12 * weightA12;
+      T const jacobian = std::pow( r12, 2 );
+      
+      T const r2Value = b2.radialComponent( r2 ) * b4.radialComponent( r2 );
+      T const a2ValueMagnitude = sphericalHarmonicMagnitude( b2.l, b2.m, theta2 ) * sphericalHarmonicMagnitude( b4.l, b4.m, theta2 );
+
+      r12Integral = r12Integral + weight * r2Value * a2ValueMagnitude * f( r1, r2, r12 ) * jacobian;
+    }
+  }
+
+  return r12Integral;
+}
+
+
+/**
+ *
+ */ 
+template< typename T, typename ATOMIC_BASIS, typename F >
 std::complex< T > integrateR1R12(
   TreutlerAhlrichsLebedev< T > const & integrator,
   ATOMIC_BASIS const & b1,
@@ -153,37 +208,7 @@ std::complex< T > integrateR1R12(
 
       CArray< T, 3 > const xyz1 = sphericalToCartesian( r1, theta1, phi1 );
 
-      T innerIntegral = 0;
-      for( IndexType a12Idx = 0; a12Idx < angularGrid.size( 1 ); ++a12Idx )
-      {
-        T const theta12 = angularGrid( 0, a12Idx );
-        T const phi12 = angularGrid( 1, a12Idx );
-        T const weightA12 = angularGrid( 2, a12Idx );
-
-        for( IndexType r12Idx = 0; r12Idx < radialGrid.size( 1 ); ++r12Idx )
-        {
-          T const r12 = radialGrid( 0, r12Idx );
-          T const weightR12 = radialGrid( 1, r12Idx );
-
-          CArray< T, 3 > const xyz12 = sphericalToCartesian( r12, theta12, phi12 );
-          
-          T const x2 = xyz1[ 0 ] + xyz12[ 0 ];
-          T const y2 = xyz1[ 1 ] + xyz12[ 1 ];
-          T const z2 = xyz1[ 2 ] + xyz12[ 2 ];
-
-          T const r2 = std::hypot( x2, y2, z2 );
-          T const theta2 = std::acos( z2 / (r2 + std::numeric_limits< T >::epsilon()) );
-          // Here we set phi2 to be zero because of an assumed symmetry of the orbitals.
-
-          T const weight = weightR12 * weightA12;
-          T const jacobian = std::pow( r12, 2 );
-          
-          T const r2Value = b2.radialComponent( r2 ) * b4.radialComponent( r2 );
-          T const a2ValueMagnitude = sphericalHarmonicMagnitude( b2.l, b2.m, theta2 ) * sphericalHarmonicMagnitude( b4.l, b4.m, theta2 );
-
-          innerIntegral = innerIntegral + weight * r2Value * a2ValueMagnitude * f( r1, r2, r12 ) * jacobian;
-        }
-      }
+      T innerIntegral = evaluateR12Integral( radialGrid, angularGrid, r1, xyz1, b2, b4, f );
 
       T const weight = weightR1 * weightA1;
       T const jacobian = std::pow( r1, 2 );
@@ -196,6 +221,92 @@ std::complex< T > integrateR1R12(
   } );
 
   return answer.get();
+}
+
+/**
+ *
+ */
+template< typename T, typename ATOMIC_BASIS, typename F >
+Array4d< std::complex< T > > integrateAllR1R12(
+  TreutlerAhlrichsLebedev< T > const & integrator,
+  std::vector< ATOMIC_BASIS > const & basisFunctions,
+  F && f )
+{
+  using PolicyType = ParallelHost;
+  
+  static_assert( std::is_same_v< T, typename ATOMIC_BASIS::Real > );
+
+  ArrayView2d< T const > const & radialGrid = integrator.m_radialGrid;
+  ArrayView2d< T const > const & angularGrid = integrator.m_angularGrid;
+
+  IndexType nBasis = basisFunctions.size();
+
+  Array4d< std::complex< T > > answer( nBasis, nBasis, nBasis, nBasis );
+
+  forAll< DefaultPolicy< PolicyType > >( angularGrid.size( 1 ),
+    [&basisFunctions, f, radialGrid, angularGrid, nBasis, answer=answer.toView()] ( IndexType const a1Idx )
+    {
+      T const theta1 = angularGrid( 0, a1Idx );
+      T const phi1 = angularGrid( 1, a1Idx );
+      T const weightA1 = angularGrid( 2, a1Idx );
+
+      for( IndexType r1Idx = 0; r1Idx < radialGrid.size( 1 ); ++r1Idx )
+      {
+        T const r1 = radialGrid( 0, r1Idx );
+        T const weightR1 = radialGrid( 1, r1Idx );
+
+        CArray< T, 3 > const xyz1 = sphericalToCartesian( r1, theta1, phi1 );
+
+        for( IndexType b2 = 0; b2 < nBasis; ++b2 )
+        {
+          for( IndexType b4 = b2; b4 < nBasis; ++b4 )
+          {
+            T const innerIntegral = evaluateR12Integral(
+              radialGrid,
+              angularGrid,
+              r1,
+              xyz1,
+              basisFunctions[ b2 ],
+              basisFunctions[ b4 ],
+              f );
+            
+            for( IndexType b1 = 0; b1 < nBasis; ++b1 )
+            {
+              ATOMIC_BASIS const & bf1 = basisFunctions[ b1 ];
+              for( IndexType b3 = 0; b3 < nBasis; ++b3 )
+              {
+                ATOMIC_BASIS const & bf3 = basisFunctions[ b3 ];
+                T const weight = weightR1 * weightA1;
+                T const jacobian = std::pow( r1, 2 );
+
+                T const r1Value = bf1.radialComponent( r1 ) * bf3.radialComponent( r1 );
+                std::complex< T > const a1Value = conj( sphericalHarmonic( bf1.l, bf1.m, theta1, phi1 ) ) * sphericalHarmonic( bf3.l, bf3.m, theta1, phi1 );
+                
+                std::complex< T > const addition = innerIntegral * weight * a1Value * r1Value * jacobian;
+                atomicAdd< PolicyType >( &answer( b1, b2, b3, b4 ), addition );
+              }
+            }
+          }
+        }
+      }
+    }
+  );
+
+  for( IndexType b1 = 0; b1 < nBasis; ++b1 )
+  {
+    for( IndexType b2 = 0; b2 < nBasis; ++b2 )
+    {
+      for( IndexType b3 = 0; b3 < nBasis; ++b3 )
+      {
+        for( IndexType b4 = b2 + 1; b4 < nBasis; ++b4 )
+        {
+          answer( b1, b4, b3, b2 ) = answer( b1, b2, b3, b4 );
+        }
+      }
+    }
+  }
+
+  return answer;
 }
 
 } // namespace tcscf::integration

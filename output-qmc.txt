@@ -1,0 +1,46 @@
+Note: Google Test filter = *Helium_Ochi
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from AtomicHartreeFock
+[ RUN      ] AtomicHartreeFock.Helium_Ochi
+nBasis = 12 r1r12 radial = 100 r1r12 AngularOrder = 25
+alpha = 1.35113
+numEval = 616
+std::real( previousEnergy ) = -2.85473
+alpha = 1.35173
+numEval = 616
+std::real( previousEnergy ) = -2.8548
+alpha = 1.35177
+
+
+ninja HartreeFockTest && srun -n1 ./tests/HartreeFockTest --gtest_filter="*Helium_Ochi"
+[2/2] Linking CXX executable tests/HartreeFockTest
+Note: Google Test filter = *Helium_Ochi
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from AtomicHartreeFock
+[ RUN      ] AtomicHartreeFock.Helium_Ochi
+nBasis = 5 r1r12 radial = 50 r1r12 AngularOrder = 27
+alpha = 1.34878
+numEval = 140
+std::real( previousEnergy ) = -2.86135
+alpha = 1.35483
+numEval = 140
+std::real( previousEnergy ) = -2.86136
+alpha = 1.35485
+numEval = 140
+std::real( previousEnergy ) = -2.86132
+alpha = 1.35479
+numEval = 140
+std::real( previousEnergy ) = -2.86137
+alpha = 1.35481
+numEval = 140
+std::real( previousEnergy ) = -2.86128
+alpha = 1.35476
+[       OK ] AtomicHartreeFock.Helium_Ochi (338839 ms)
+[----------] 1 test from AtomicHartreeFock (338840 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (338840 ms total)
+[  PASSED  ] 1 test.
+Umpire            HOST high water mark:   39.9 KB

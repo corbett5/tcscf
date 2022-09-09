@@ -2,6 +2,9 @@
 
 #include "AtomicBasis.hpp"
 
+#include "integration/quadrature.hpp"
+#include "integration/changeOfVariables.hpp"
+
 namespace tcscf
 {
 
@@ -38,13 +41,13 @@ struct OchiBasisFunction
    * 
    */
   Real fnl( Real const r ) const
-  { return normalization * std::pow( r, l + 1 ) * assocLaguerre( n, 2 * l + 2, 2 * alpha * r ) * std::exp(-alpha * r); }
+  { return radialComponent( r ) * r; }
 
   /**
    * 
    */
   Real radialComponent( Real const r ) const
-  { return fnl( r ) / r; }
+  { return normalization * std::pow( r, l ) * assocLaguerre( n, 2 * l + 2, 2 * alpha * r ) * std::exp(-alpha * r); }
 
   Real const alpha;
   int const n;
@@ -62,6 +65,7 @@ struct OchiBasisFunction
  */
 template< typename REAL >
 REAL coreMatrixElement(
+  ArrayView2d< REAL const > const & quadratureGrid,
   int const Z,
   OchiBasisFunction< REAL > const & b1,
   OchiBasisFunction< REAL > const & b2 )
@@ -78,10 +82,10 @@ REAL coreMatrixElement(
   int const n2 = b2.n;
   int const l = b1.l;
 
-  REAL const integral = integrate0toInf< REAL >(
-    [=] ( REAL const r )
+  REAL const integral = integration::integrate< 1 >( quadratureGrid,
+    [=] ( CArray< REAL, 1 > const r )
     {
-      return b1.fnl( r ) * 1 / r * b2.fnl( r );
+      return b1.fnl( r[ 0 ] ) * 1 / r[ 0 ] * b2.fnl( r[ 0 ] );
     }
   );
 

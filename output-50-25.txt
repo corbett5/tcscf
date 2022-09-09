@@ -1,0 +1,10 @@
+Note: Google Test filter = AtomicHartreeFock.Helium_Ochi
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from AtomicHartreeFock
+[ RUN      ] AtomicHartreeFock.Helium_Ochi
+nBasis = 12 r1r12 radial = 50 r1r12 AngularOrder = 25
+alpha = 1.34878
+numEval = 424
+std::real( previousEnergy ) = -2.83104
+alpha = 1.32278

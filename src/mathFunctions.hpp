@@ -1,18 +1,9 @@
 #pragma once
 
 #include "LvArrayInterface.hpp"
+#include "caliperInterface.hpp"
 
-// #define STD_SPECIAL_FUNCTIONS
-
-#if defined( STD_SPECIAL_FUNCTIONS )
-  #include <cmath>
-#else
-  #include <boost/math/special_functions/spherical_harmonic.hpp>
-  #include <boost/math/special_functions/laguerre.hpp>
-#endif
-
-#include <boost/math/quadrature/tanh_sinh.hpp>
-#include <boost/math/quadrature/exp_sinh.hpp>
+#include <cmath>
 
 namespace tcscf
 {
@@ -116,11 +107,7 @@ T sphericalHarmonicMagnitude( int const l, int const m, T const theta )
 template< typename T >
 std::complex< T > sphericalHarmonic( int const l, int const m, T const theta, T const phi )
 {
-#if defined( STD_SPECIAL_FUNCTIONS )
   return sphericalHarmonicMagnitude( l, m, theta ) * cExp( m * phi );
-#else
-  return boost::math::spherical_harmonic( l, m, theta, phi );
-#endif
 }
 
 /**
@@ -129,11 +116,7 @@ std::complex< T > sphericalHarmonic( int const l, int const m, T const theta, T 
 template< typename T >
 T assocLaguerre( int const n, int const k, T const x )
 {
-#if defined( STD_SPECIAL_FUNCTIONS )
   return std::assoc_laguerre( n, k, x );
-#else
-  return boost::math::laguerre( n, k, x );
-#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -154,42 +137,111 @@ constexpr CArray< T, 3 > sphericalToCartesian( T const r, T const theta, T const
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// Boost quadrature wrappers
+// Matrix stuff
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 /**
- *
+ * 
  */
-template< typename REAL, typename F >
-auto integrate0toInf( F const & f )
+template< typename T, typename LAMBDA >
+void fillOneElectronHermitianMatrix(
+  ArrayView2d< T > const & matrix,
+  LAMBDA && lambda )
 {
-  return boost::math::quadrature::exp_sinh< REAL >{}.integrate( f );
+  TCSCF_MARK_FUNCTION;
+
+  LVARRAY_ERROR_IF_NE( matrix.size( 0 ), matrix.size( 1 ) );
+
+  using ResultType = decltype( lambda( 0, 0 ) );
+
+  for( int a = 0; a < matrix.size( 0 ); ++a )
+  {
+    for( int b = a; b < matrix.size( 0 ); ++b )
+    {
+      ResultType const value = lambda( a, b );
+      matrix( a, b ) += value;
+
+      if( a != b )
+      {
+        matrix( b, a ) += conj( value );
+      }
+    }
+  }
 }
 
 /**
  * 
  */
-template< typename REAL, typename F >
-auto sphericalCoordinates3DIntegral( F const & f )
+template< typename T, typename LAMBDA >
+void fillTwoElectronSymmetricHermitianArray(
+  ArrayView4d< T > const & array,
+  bool const realBasisFunctions,
+  LAMBDA && lambda )
 {
-  boost::math::quadrature::tanh_sinh< REAL > angleIntegrator;
+  TCSCF_MARK_FUNCTION;
 
-  auto integralOverR = [&] ( REAL const r )
+  LVARRAY_ERROR_IF_NE( array.size( 0 ), array.size( 1 ) );
+  LVARRAY_ERROR_IF_NE( array.size( 0 ), array.size( 2 ) );
+  LVARRAY_ERROR_IF_NE( array.size( 0 ), array.size( 3 ) );
+
+  int const N = array.size( 0 );
+
+  for( int a = 0; a < N; ++a )
   {
-    auto integralOverTheta = [&] ( REAL const theta )
+    for( int b = a; b < N; ++b )
     {
-      auto integrand = [&] ( REAL const phi )
+      for( int c = a; c < N; ++c )
       {
-        return f( r, theta, phi ) * std::pow( r, 2 ) * std::sin( theta );
-      };
+        int const dStart = realBasisFunctions ? b : a;
+        for( int d = dStart; d < N; ++d )
+        {
+          T const value{ lambda( a, b, c, d ) };
 
-      return angleIntegrator.integrate( integrand, 0, 2 * pi< REAL > );
-    };
+          array( a, b, c, d ) += value;
 
-    return angleIntegrator.integrate( integralOverTheta, 0, pi< REAL > );
-  };
+          bool const useSymmetry = a != b;
+          bool const useHermitian = a != c && a != d;
+          bool const useReal = realBasisFunctions && d != b;
 
-  return boost::math::quadrature::exp_sinh<REAL>{}.integrate( integralOverR );
+          if( useSymmetry )
+          {
+            array( b, a, d, c ) += value;
+          }
+
+          if( useHermitian || (realBasisFunctions && a != c) )
+          {
+            array( c, d, a, b ) += conj( value );
+          }
+
+          if( useHermitian && useSymmetry )
+          { 
+            array( d, c, b, a ) += conj( value );
+          }
+
+          if( useReal )
+          {
+            array( a, d, c, b ) += value;
+          }
+
+          if( useReal && useSymmetry )
+          {
+            array( d, a, b, c ) += value;
+          }
+
+          if( useReal && useHermitian )
+          {
+            array( c, b, a, d ) += value;
+          }
+
+          if( useReal && useHermitian && useSymmetry )
+          {
+            array( b, c, d, a ) += value;
+          }
+        }
+      }
+    }
+  }
 }
+
 
 } // namespace tcscf

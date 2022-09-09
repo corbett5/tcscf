@@ -181,7 +181,7 @@ void RCSHartreeFock< T >::compute(
 }
 
 template< typename REAL >
-void AtomicRCSHartreeFock< REAL >::compute(
+std::complex< REAL > AtomicRCSHartreeFock< REAL >::iteration(
   ArrayView2d< REAL const > const & oneElectronTerms,
   ArrayView4d< std::complex< REAL > const > const & twoElectronTerms )
 {
@@ -196,29 +196,39 @@ void AtomicRCSHartreeFock< REAL >::compute(
 
   LVARRAY_ERROR_IF_NE( density.size( 0 ), int( params.size() ) );
   LVARRAY_ERROR_IF_NE( density.size( 1 ), int( params.size() ) );
+  
+  internal::constructAtomicFockOperator< Real >(
+    fockOperator.toView(),
+    oneElectronTerms,
+    twoElectronTerms,
+    density.toViewConst(),
+    params );
 
+  std::complex< Real > const energy = internal::calculateEnergy(
+    fockOperator.toViewConst(),
+    oneElectronTerms,
+    density.toViewConst() );
+
+  hermitianEigendecomposition( fockOperator.toView(), eigenvalues.toView() );
+
+  internal::getNewDensity( nElectrons, density, fockOperator.toViewConst() );
+
+  return energy;
+}
+
+template< typename REAL >
+void AtomicRCSHartreeFock< REAL >::compute(
+  ArrayView2d< REAL const > const & oneElectronTerms,
+  ArrayView4d< std::complex< REAL > const > const & twoElectronTerms,
+  int const maxIter )
+{
+  TCSCF_MARK_FUNCTION;
 
   std::complex< Real > previousEnergy = std::numeric_limits< Real >::max();
 
-  for( int iter = 0; iter < 100; ++iter )
+  for( int iter = 0; iter < maxIter; ++iter )
   {
-    internal::constructAtomicFockOperator< Real >(
-      fockOperator.toView(),
-      oneElectronTerms,
-      twoElectronTerms,
-      density.toViewConst(),
-      params );
-
-    std::complex< Real > const energy = internal::calculateEnergy(
-      fockOperator.toViewConst(),
-      oneElectronTerms,
-      density.toViewConst() );
-
-    previousEnergy = energy;
-
-    hermitianEigendecomposition( fockOperator.toView(), eigenvalues.toView() );
-
-    internal::getNewDensity( nElectrons, density, fockOperator.toViewConst() );
+    previousEnergy = iteration( oneElectronTerms, twoElectronTerms );
   }
 
   LVARRAY_LOG_VAR( std::real( previousEnergy ) );

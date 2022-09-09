@@ -1,0 +1,52 @@
+packages:
+  all:
+    target: [default]
+    compiler: [gcc, clang]
+    providers:
+      mpi: [mvapich2]
+      blas: [intel-mkl]
+      lapack: [intel-mkl]
+
+  mvapich2:
+    buildable: False
+    externals:
+      - spec: mvapich2@2.3 %gcc@8.3.1
+        prefix: /usr/tce/packages/mvapich2/mvapich2-2.3-gcc-8.3.1/
+      - spec: mvapich2@2.3 %gcc@10.2.1
+        prefix: /usr/tce/packages/mvapich2/mvapich2-2.3-gcc-10.2.1/
+      - spec: mvapich2@2.3 %clang@10.0.1
+        prefix:  /usr/tce/packages/mvapich2/mvapich2-2.3-clang-10.0.1
+      - spec: mvapich2@2.3 %clang@12.0.0
+        prefix:  /usr/tce/packages/mvapich2/mvapich2-2.3-clang-12.0.0
+      - spec: mvapich2@2.3 %clang@13.0.0
+        prefix:  /usr/tce/packages/mvapich2/mvapich2-2.3-clang-13.0.0
+
+  intel-mkl:
+    buildable: False
+    externals:
+      - spec: intel-mkl@2020.0.166 threads=openmp
+        prefix: /usr/tce/packages/mkl/mkl-2020.0/
+
+  cmake:
+    buildable: False
+    externals:
+    - spec: cmake@3.14.5
+      prefix: /usr/tce/packages/cmake/cmake-3.14.5
+
+  python:
+    buildable: False
+    externals:
+    - spec: python@3.8.2
+      prefix: /usr/tce/packages/python/python-3.8.2
+
+  papi:
+    buildable: False
+    externals:
+    - spec: papi@5.4.3
+      prefix: /usr/tce/packages/papi/papi-5.4.3
+
+  boost:
+    buildable: False
+    externals:
+    - spec: boost@1.72.0
+      prefix: /usr/tce/packages/boost/boost-1.72.0-mvapich2-2.3-intel-19.0.4"

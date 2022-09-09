@@ -1,0 +1,84 @@
+Note: Google Test filter = *Helium_Ochi
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from AtomicHartreeFock
+[ RUN      ] AtomicHartreeFock.Helium_Ochi
+nBasis = 12 r1r12 radial = 25 r1r12 AngularOrder = 35
+alpha = 1.35113
+numEval = 424
+std::real( previousEnergy ) = -2.85085
+alpha = 1.34565
+numEval = 424
+std::real( previousEnergy ) = -2.85067
+alpha = 1.34559
+Note: Google Test filter = AtomicHartreeFock.Helium_Ochi
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from AtomicHartreeFock
+[ RUN      ] AtomicHartreeFock.Helium_Ochi
+nBasis = 12 r1r12 radial = 50 r1r12 AngularOrder = 35
+alpha = 1.35113
+numEval = 424
+std::real( previousEnergy ) = -2.85297
+alpha = 1.34878
+Note: Google Test filter = *Helium_Ochi
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from AtomicHartreeFock
+[ RUN      ] AtomicHartreeFock.Helium_Ochi
+Multi integral quadrature, nMax = 4, lMax = 0, nBasis = 5, radial ngrid = 100, angular order = 41
+alpha = 1.34878
+std::real( previousEnergy ) = -2.86058
+alpha = 1.35368
+std::real( previousEnergy ) = -2.8606
+alpha = 1.35368
+Note: Google Test filter = *Helium_Ochi
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from AtomicHartreeFock
+[ RUN      ] AtomicHartreeFock.Helium_Ochi
+Multi integral quadrature, nMax = 4, lMax = 0, nBasis = 5, radial ngrid = 75, angular order = 45
+***** ERROR
+***** LOCATION: ../src/integration/Lebedev.cpp:31
+***** Controlling expression (should be false): true
+Order 45 not supported.
+
+** StackTrace of 11 frames **
+Frame 0: tcscf::integration::TreutlerAhlrichsLebedev<double>::TreutlerAhlrichsLebedev(double, int, int) 
+Frame 1: tcscf::testing::AtomicHartreeFock_Helium_Ochi_Test::TestBody() 
+Frame 2: void testing::internal::HandleExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) 
+Frame 3: testing::Test::Run() 
+Frame 4: testing::TestInfo::Run() 
+Frame 5: testing::TestSuite::Run() 
+Frame 6: testing::internal::UnitTestImpl::RunAllTests() 
+Frame 7: bool testing::internal::HandleExceptionsInMethodIfSupported<testing::internal::UnitTestImpl, bool>(testing::internal::UnitTestImpl*, bool (testing::internal::UnitTestImpl::*)(), char const*) 
+Frame 8: testing::UnitTest::Run() 
+Frame 9: main 
+Frame 10: __libc_start_main 
+Frame 11: /usr/WS2/corbett5/tcscf/tcscf/build-quartz-toss_3_x86_64_ib-clang@13.0.1-release/./tests/HartreeFockTest 
+=====
+
+Note: Google Test filter = *Helium_Ochi
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from AtomicHartreeFock
+[ RUN      ] AtomicHartreeFock.Helium_Ochi
+Multi integral quadrature, nMax = 4, lMax = 0, nBasis = 5, radial ngrid = 75, angular order = 47
+alpha = 1.34878
+std::real( previousEnergy ) = -2.86077
+alpha = 1.35397
+std::real( previousEnergy ) = -2.86078
+alpha = 1.35397
+std::real( previousEnergy ) = -2.86078
+alpha = 1.35397
+Note: Google Test filter = *Helium_Ochi
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from AtomicHartreeFock
+[ RUN      ] AtomicHartreeFock.Helium_Ochi
+Multi integral quadrature, nMax = 4, lMax = 0, nBasis = 5, radial ngrid = 100, angular order = 47
+alpha = 1.34878
+std::real( previousEnergy ) = -2.86085
+alpha = 1.35409
+std::real( previousEnergy ) = -2.86087
+alpha = 1.35409

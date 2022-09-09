@@ -12,6 +12,8 @@ struct RCSHartreeFock
 {
   using Real = RealType< T >;
 
+  /**
+   */
   RCSHartreeFock( int const numElectrons, int const numBasisFunctions ):
     nElectrons{ numElectrons },
     basisSize{ numBasisFunctions },
@@ -20,6 +22,8 @@ struct RCSHartreeFock
     eigenvalues( basisSize )
   {}
   
+  /**
+   */
   void compute(
     bool const orthogonal,
     ArrayView2d< T const > const & overlap,
@@ -33,13 +37,15 @@ struct RCSHartreeFock
   Array1d< Real > const eigenvalues;
 };
 
-
-
+/**
+ */
 template< typename REAL >
 struct AtomicRCSHartreeFock
 {
   using Real = REAL;
 
+  /**
+   */
   AtomicRCSHartreeFock(
     int const numElectrons,
     std::vector< AtomicParams > const & atomicParams ):
@@ -50,9 +56,18 @@ struct AtomicRCSHartreeFock
     eigenvalues( params.size() )
   {}
 
+  /**
+   */
+  std::complex< REAL > iteration(
+    ArrayView2d< REAL const > const & oneElectronTerms,
+    ArrayView4d< std::complex< REAL > const > const & twoElectronTerms );
+
+  /**
+   */
   void compute(
     ArrayView2d< Real const > const & oneElectronTerms,
-    ArrayView4d< std::complex< Real > const > const & twoElectronTerms );
+    ArrayView4d< std::complex< Real > const > const & twoElectronTerms,
+    int const maxIter );
 
   int const nElectrons;
   std::vector< AtomicParams > const params;

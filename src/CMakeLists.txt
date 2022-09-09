@@ -31,7 +31,7 @@ set( tcscf_sources
      integration/Lebedev.cpp
 )
 
-set( dependencyList ${dependencyList} blas lapack boost gsl adiak lvarray optionparser )
+set( dependencyList ${dependencyList} blas lapack gsl adiak lvarray optionparser )
 
 if( ENABLE_OPENMP )
     set( dependencyList ${dependencyList} openmp )

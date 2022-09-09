@@ -80,4 +80,24 @@ inline void forAll( IndexType const end, LAMBDA && body )
   RAJA::forall< POLICY >( RAJA::TypedRangeSegment< IndexType >( 0, end ), std::forward< LAMBDA >( body ) );
 }
 
+
+/**
+ * 
+ */
+template< typename POLICY_TYPE, typename T >
+void atomicAdd( T * const ptr, T const & value )
+{
+  RAJA::atomicAdd< Atomic< POLICY_TYPE > >( ptr, value );
+}
+
+/**
+ * 
+ */
+template< typename POLICY_TYPE, typename T >
+void atomicAdd( std::complex< T > * const ptr, std::complex< T > const & value )
+{
+  RAJA::atomicAdd< Atomic< POLICY_TYPE > >( reinterpret_cast< T * >( ptr ), value.real() );
+  RAJA::atomicAdd< Atomic< POLICY_TYPE > >( reinterpret_cast< T * >( ptr ) + 1, value.imag() );
+}
+
 } // namespace tcscf

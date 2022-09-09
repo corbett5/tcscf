@@ -63,6 +63,7 @@ struct HydrogenLikeBasisFunction
  */
 template< typename REAL >
 REAL coreMatrixElement(
+  ArrayView2d< REAL const > const & LVARRAY_UNUSED_ARG( quadratureGrid ),
   int const Z,
   HydrogenLikeBasisFunction< REAL > const & b1,
   HydrogenLikeBasisFunction< REAL > const & b2 )

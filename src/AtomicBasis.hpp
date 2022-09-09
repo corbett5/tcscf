@@ -35,22 +35,6 @@ auto overlap( BASIS_FUNCTION const & b1, BASIS_FUNCTION const & b2 )
 /**
  * 
  */
-template< typename BASIS_FUNCTION >
-auto overlapBoost( BASIS_FUNCTION const & b1, BASIS_FUNCTION const & b2 )
-{
-  using Real = typename BASIS_FUNCTION::Real;
-
-  return sphericalCoordinates3DIntegral< Real >(
-    [b1, b2] ( Real const r, Real const theta, Real const phi )
-    {
-      return conj( b1( r, theta, phi ) ) * b2( r, theta, phi );
-    }
-  );
-}
-
-/**
- * 
- */
 template< typename REAL >
 constexpr REAL calculateR12(
   REAL const r1,
@@ -190,111 +174,9 @@ struct AtomicParams
 /**
  * 
  */
-template< typename T, typename LAMBDA >
-void fillOneElectronHermitianMatrix(
-  ArrayView2d< T > const & matrix,
-  LAMBDA && lambda )
-{
-  TCSCF_MARK_FUNCTION;
-
-  LVARRAY_ERROR_IF_NE( matrix.size( 0 ), matrix.size( 1 ) );
-
-  using ResultType = decltype( lambda( 0, 0 ) );
-
-  for( int a = 0; a < matrix.size( 0 ); ++a )
-  {
-    for( int b = a; b < matrix.size( 0 ); ++b )
-    {
-      ResultType const value = lambda( a, b );
-      matrix( a, b ) += value;
-
-      if( a != b )
-      {
-        matrix( b, a ) += conj( value );
-      }
-    }
-  }
-}
-
-/**
- * 
- */
-template< typename T, typename LAMBDA >
-void fillTwoElectronSymmetricHermitianArray(
-  ArrayView4d< T > const & array,
-  bool const realBasisFunctions,
-  LAMBDA && lambda )
-{
-  TCSCF_MARK_FUNCTION;
-
-  LVARRAY_ERROR_IF_NE( array.size( 0 ), array.size( 1 ) );
-  LVARRAY_ERROR_IF_NE( array.size( 0 ), array.size( 2 ) );
-  LVARRAY_ERROR_IF_NE( array.size( 0 ), array.size( 3 ) );
-
-  int const N = array.size( 0 );
-
-  for( int a = 0; a < N; ++a )
-  {
-    for( int b = a; b < N; ++b )
-    {
-      for( int c = a; c < N; ++c )
-      {
-        int const dStart = realBasisFunctions ? b : a;
-        for( int d = dStart; d < N; ++d )
-        {
-          T const value{ lambda( a, b, c, d ) };
-
-          array( a, b, c, d ) += value;
-
-          bool const useSymmetry = a != b;
-          bool const useHermitian = a != c && a != d;
-          bool const useReal = realBasisFunctions && d != b;
-
-          if( useSymmetry )
-          {
-            array( b, a, d, c ) += value;
-          }
-
-          if( useHermitian || (realBasisFunctions && a != c) )
-          {
-            array( c, d, a, b ) += conj( value );
-          }
-
-          if( useHermitian && useSymmetry )
-          { 
-            array( d, c, b, a ) += conj( value );
-          }
-
-          if( useReal )
-          {
-            array( a, d, c, b ) += value;
-          }
-
-          if( useReal && useSymmetry )
-          {
-            array( d, a, b, c ) += value;
-          }
-
-          if( useReal && useHermitian )
-          {
-            array( c, b, a, d ) += value;
-          }
-
-          if( useReal && useHermitian && useSymmetry )
-          {
-            array( b, c, d, a ) += value;
-          }
-        }
-      }
-    }
-  }
-}
-
-/**
- * 
- */
 template< typename BASIS, typename T >
 void fillCoreMatrix(
+  ArrayView2d< typename BASIS::Real const > const & quadratureGrid,
   int const Z,
   std::vector< BASIS > const & basisFunctions,
   ArrayView2d< T > const & matrix )
@@ -302,9 +184,9 @@ void fillCoreMatrix(
   LVARRAY_ERROR_IF_NE( matrix.size( 0 ), IndexType( basisFunctions.size() ) );
 
   fillOneElectronHermitianMatrix( matrix,
-    [Z, &basisFunctions] ( int const a, int const b )
+    [Z, &basisFunctions, &quadratureGrid] ( int const a, int const b )
     {
-      return coreMatrixElement( Z, basisFunctions[ a ], basisFunctions[ b ] );
+      return coreMatrixElement( quadratureGrid, Z, basisFunctions[ a ], basisFunctions[ b ] );
     }
   );
 }
@@ -356,7 +238,7 @@ void fillAtomicR12Array(
 
   fillTwoElectronSymmetricHermitianArray( array, false,
     [&basisFunctions, &numEval] ( int const a, int const b, int const c, int const d )
-    {j
+    {
       if( basisFunctions[ a ].l == basisFunctions[ c ].l &&
           basisFunctions[ a ].m == basisFunctions[ c ].m &&
           basisFunctions[ b ].l == basisFunctions[ d ].l &&
@@ -381,24 +263,22 @@ void fillAtomicR12Array(
       return std::complex< Real >{ 0 };
     }
   );
+
+  LVARRAY_LOG_VAR( numEval );
 }
 
 template< typename BASIS, typename T >
 void fillAtomicR12Array(
-  double const epsilon,
-  int const nRadial,
-  int const angularOrder,
+  integration::TreutlerAhlrichsLebedev< typename BASIS::Real > quadratureGrid,
   std::vector< BASIS > const & basisFunctions,
   ArrayView4d< T > const & array )
 {
   using Real = typename BASIS::Real;
 
-  integration::TreutlerAhlrichsLebedev< Real > grid( epsilon, nRadial, angularOrder );
-
   int numEval = 0;
 
   fillTwoElectronSymmetricHermitianArray( array, true,
-    [&basisFunctions, &grid, &numEval] ( int const a, int const b, int const c, int const d )
+    [&basisFunctions, &quadratureGrid, &numEval] ( int const a, int const b, int const c, int const d )
     {      
       if( ( basisFunctions[ a ].l == basisFunctions[ c ].l &&
             basisFunctions[ a ].m == basisFunctions[ c ].m &&
@@ -410,7 +290,7 @@ void fillAtomicR12Array(
             basisFunctions[ b ].m == basisFunctions[ c ].m ) )
       {
         ++numEval;
-        return integrateR1R12( grid, basisFunctions[ a ], basisFunctions[ b ], basisFunctions[ c ], basisFunctions[ d ],
+        return integrateR1R12( quadratureGrid, basisFunctions[ a ], basisFunctions[ b ], basisFunctions[ c ], basisFunctions[ d ],
           [] ( Real const LVARRAY_UNUSED_ARG( r1 ), Real const LVARRAY_UNUSED_ARG( r2 ), Real const r12 )
           { return 1.0 / r12; }
         );
@@ -419,6 +299,8 @@ void fillAtomicR12Array(
       return std::complex< Real >{ 0 };
     }
   );
+
+  LVARRAY_LOG_VAR( numEval );
 }
 
 } // namespace tcscf

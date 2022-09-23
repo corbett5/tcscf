@@ -64,7 +64,7 @@ struct AtomicRCSHartreeFock
 
   /**
    */
-  void compute(
+  std::complex< REAL > compute(
     ArrayView2d< Real const > const & oneElectronTerms,
     ArrayView4d< std::complex< Real > const > const & twoElectronTerms,
     int const maxIter );

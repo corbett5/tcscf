@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Array.hpp"
+#include "ArrayOfArrays.hpp"
 #include "ChaiBuffer.hpp"
 #include "tensorOps.hpp"
 #include "memcpy.hpp"
@@ -57,6 +58,11 @@ using Array4d = Array< T, 4, PERM >;
 template< typename T, int USD=3 >
 using ArrayView4d = ArrayView< T, 4, USD >;
 
+template< typename T >
+using ArrayOfArrays = LvArray::ArrayOfArrays< T, IndexType, LvArray::ChaiBuffer >;
+
+template< typename T >
+using ArrayOfArraysView = LvArray::ArrayOfArraysView< T, IndexType, false, LvArray::ChaiBuffer >;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // More common stuff

@@ -2,7 +2,7 @@
 
 #include "LvArrayInterface.hpp"
 #include "caliperInterface.hpp"
-#include "qmcWrapper.hpp"
+#include "integration/qmcWrapper.hpp"
 #include "mathFunctions.hpp"
 
 #include "integration/TreutlerAhlrichsLebedev.hpp"
@@ -24,29 +24,12 @@ auto overlap( BASIS_FUNCTION const & b1, BASIS_FUNCTION const & b2 )
 {
   using Real = typename BASIS_FUNCTION::Real;
 
-  return qmc::sphericalCoordinates3DIntegral(
+  return integration::sphericalCoordinates3DIntegral(
     [b1, b2] ( Real const r, Real const theta, Real const phi )
     {
       return conj( b1( r, theta, phi ) ) * b2( r, theta, phi );
     }
   );
-}
-
-/**
- * 
- */
-template< typename REAL >
-constexpr REAL calculateR12(
-  REAL const r1,
-  REAL const theta1,
-  REAL const phi1,
-  REAL const r2,
-  REAL const theta2,
-  REAL const phi2 )
-{
-  REAL r12 = std::pow( r1, 2 ) + std::pow( r2, 2 );
-  r12 -= 2 * r1 * r2 * (std::sin( theta1 ) * std::sin( theta2 ) * std::cos( phi1  - phi2 ) + std::cos( theta1 ) * std::cos( theta2 ));
-  return std::sqrt( std::abs( r12 ) );
 }
 
 /**
@@ -61,7 +44,7 @@ auto r12MatrixElement(
 {
   using Real = typename BASIS_FUNCTION::Real;
 
-  return qmc::sphericalCoordinates6DIntegral(
+  return integration::sphericalCoordinates6DIntegral(
     [&] ( Real const r1, Real const theta1, Real const phi1, Real const r2, Real const theta2, Real const phi2 )
     {
       Real const r12 = calculateR12( r1, theta1, phi1, r2, theta2, phi2 );
@@ -99,7 +82,7 @@ typename BASIS_FUNCTION::Real atomicCoulombOperator(
   int const l2 = b2.l;
   int const m2 = b2.m;
 
-  return qmc::sphericalCoordinates5DIntegral(
+  return integration::sphericalCoordinates5DIntegral(
     [&] ( Real const r1, Real const theta1, Real const phi1, Real const r2, Real const theta2 )
     {
       Real const r12 = calculateR12( r1, theta1, phi1, r2, theta2, Real( 0 ) );
@@ -142,7 +125,7 @@ typename std::complex< typename BASIS_FUNCTION::Real > atomicExchangeOperator(
   int const l2 = b2.l;
   int const m2 = b2.m;
 
-  return qmc::sphericalCoordinates5DIntegral(
+  return integration::sphericalCoordinates5DIntegral(
     [&] ( Real const r1, Real const theta1, Real const phi1, Real const r2, Real const theta2 )
     {
       Real const r12 = calculateR12( r1, theta1, phi1, r2, theta2, Real( 0 ) );

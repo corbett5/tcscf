@@ -48,7 +48,7 @@ auto integrate(
   INTEGRATOR const & integrator,
   F && f ) -> decltype( f( integrator.gridPoint( 0 ).x ) * typename INTEGRATOR::Real {} )
 {
-  return integrate( integrator, changeOfVariables::None< typename INTEGRATOR::Real > {}, std::forward< F >( f ) );
+  return integrate( integrator, changeOfVariables::None< typename INTEGRATOR::Real, INTEGRATOR::NDIM > {}, std::forward< F >( f ) );
 }
 
 /**
@@ -90,7 +90,7 @@ template< typename INTEGRATOR >
 Array2d< typename INTEGRATOR::Real > createGrid(
   INTEGRATOR const & integrator )
 {
-  return createGrid( integrator, changeOfVariables::None< typename INTEGRATOR::Real > {} );
+  return createGrid( integrator, changeOfVariables::None< typename INTEGRATOR::Real, INTEGRATOR::NDIM > {} );
 }
 
 /**
@@ -118,4 +118,4 @@ auto integrate( ArrayView2d< REAL const > const & grid, F && f ) -> decltype( f(
   return answer;
 }
 
-} // namespace tcscf::quadrature
+} // namespace tcscf::integration

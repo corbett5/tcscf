@@ -217,7 +217,7 @@ std::complex< REAL > AtomicRCSHartreeFock< REAL >::iteration(
 }
 
 template< typename REAL >
-void AtomicRCSHartreeFock< REAL >::compute(
+std::complex< REAL > AtomicRCSHartreeFock< REAL >::compute(
   ArrayView2d< REAL const > const & oneElectronTerms,
   ArrayView4d< std::complex< REAL > const > const & twoElectronTerms,
   int const maxIter )
@@ -231,7 +231,7 @@ void AtomicRCSHartreeFock< REAL >::compute(
     previousEnergy = iteration( oneElectronTerms, twoElectronTerms );
   }
 
-  LVARRAY_LOG_VAR( std::real( previousEnergy ) );
+  return previousEnergy;
 }
 
 // Explicit instantiations.

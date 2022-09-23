@@ -119,8 +119,33 @@ T assocLaguerre( int const n, int const k, T const x )
   return std::assoc_laguerre( n, k, x );
 }
 
+/**
+ * 
+ */
+template< typename T >
+std::pair< double, double > meanAndStd( ArrayView1d< T const > const & values )
+{
+  double mean = 0;
+  for( auto value : values )
+  {
+    mean += value;
+  }
+
+  mean /= values.size();
+
+  double var = 0;
+  for( auto value : values )
+  {
+    var += std::pow( value - mean, 2 );
+  }
+
+  var /= values.size();
+
+  return { mean, std::pow( var, 0.5 ) };
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// Coordinate transformations
+// Geometry
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 /**
@@ -134,6 +159,23 @@ constexpr CArray< T, 3 > sphericalToCartesian( T const r, T const theta, T const
   T const z = r * std::cos( theta );
 
   return { x, y, z };
+}
+
+/**
+ * 
+ */
+template< typename REAL >
+constexpr REAL calculateR12(
+  REAL const r1,
+  REAL const theta1,
+  REAL const phi1,
+  REAL const r2,
+  REAL const theta2,
+  REAL const phi2 )
+{
+  REAL r12 = std::pow( r1, 2 ) + std::pow( r2, 2 );
+  r12 -= 2 * r1 * r2 * (std::sin( theta1 ) * std::sin( theta2 ) * std::cos( phi1  - phi2 ) + std::cos( theta1 ) * std::cos( theta2 ));
+  return std::sqrt( std::abs( r12 ) );
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

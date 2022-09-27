@@ -149,19 +149,6 @@ std::pair< double, double > meanAndStd( ArrayView1d< T const > const & values )
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 /**
- *
- */
-template< typename T >
-constexpr CArray< T, 3 > sphericalToCartesian( T const r, T const theta, T const phi )
-{
-  T const x = r * std::cos( phi ) * std::sin( theta );
-  T const y = r * std::sin( phi ) * std::sin( theta );
-  T const z = r * std::cos( theta );
-
-  return { x, y, z };
-}
-
-/**
  * 
  */
 template< typename REAL >
@@ -176,6 +163,104 @@ constexpr REAL calculateR12(
   REAL r12 = std::pow( r1, 2 ) + std::pow( r2, 2 );
   r12 -= 2 * r1 * r2 * (std::sin( theta1 ) * std::sin( theta2 ) * std::cos( phi1  - phi2 ) + std::cos( theta1 ) * std::cos( theta2 ));
   return std::sqrt( std::abs( r12 ) );
+}
+
+template< typename REAL >
+struct Cartesian;
+
+template< typename REAL >
+struct Spherical
+{
+  constexpr operator Cartesian< REAL >() const
+  {
+    REAL sinPhi, cosPhi;
+    LvArray::math::sincos( _phi, sinPhi, cosPhi );
+
+    REAL sinTheta, cosTheta;
+    LvArray::math::sincos( _theta, sinTheta, cosTheta );
+
+    return { _r * cosPhi * sinTheta, _r * sinPhi * sinTheta, _r * cosTheta };
+  }
+
+  constexpr REAL x() const
+  { return _r * std::cos( _phi ) * std::sin( _theta ); }
+
+  constexpr REAL y() const
+  { return _r * std::sin( _phi ) * std::sin( _theta ); }
+
+  constexpr REAL z() const
+  { return _r * std::cos( _theta ); }
+
+  constexpr REAL r() const
+  { return _r; }
+
+  constexpr REAL theta() const
+  { return _theta; }
+
+  constexpr REAL phi() const
+  { return _phi; }
+
+  REAL const _r;
+  REAL const _theta;
+  REAL const _phi;
+};
+
+
+template< typename REAL >
+struct Cartesian
+{
+  constexpr REAL x() const
+  { return _x; }
+
+  constexpr REAL y() const
+  { return _y; }
+
+  constexpr REAL z() const
+  { return _z; }
+
+  constexpr REAL r() const
+  { return std::hypot( _x, _y, _z ); }
+
+  constexpr REAL theta() const
+  { return std::acos( _z / r() ); }
+
+  constexpr REAL phi() const
+  { return std::atan2( _y, _x ); }
+
+  constexpr Cartesian operator+( Cartesian const & other ) const
+  {
+    return { _x + other._x, _y + other._y, _z + other._z };
+  }
+
+  constexpr void scaledAdd( REAL const alpha, Cartesian const other )
+  {
+    _x = _x + alpha * other._x;
+    _y = _y + alpha * other._y;
+    _z = _z + alpha * other._z;
+  }
+
+  REAL _x;
+  REAL _y;
+  REAL _z;
+};
+
+
+template< typename V1, typename V2 >
+auto dot( V1 & v1, V2 const & v2 )
+{
+  return v1.x() * v2.x() + v1.y() * v2.y() + v1.z() * v2.z();
+}
+
+template< typename REAL >
+REAL dot( Spherical< REAL > const & v1, Spherical< REAL > const & v2 )
+{
+  REAL sinTheta1, cosTheta1;
+  LvArray::math::sincos( v1.theta(), sinTheta1, cosTheta1 );
+
+  REAL sinTheta2, cosTheta2;
+  LvArray::math::sincos( v2.theta(), sinTheta2, cosTheta2 );
+
+  return v1.r() * v2.r() * ( sinTheta1 * sinTheta2 * std::cos( v1.phi() - v2.phi() ) + cosTheta1 * cosTheta2 );
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

@@ -102,21 +102,19 @@ template< typename T, typename ATOMIC_BASIS, typename F >
 T evaluateR12Integral(
   ArrayView2d< T const > const & quadratureGrid,
   T const r1,
-  CArray< T, 3 > const & r1C,
+  Cartesian< T > const & r1C,
   ATOMIC_BASIS const & b2,
   ATOMIC_BASIS const & b4,
   F && f )
 {
   return 2 * pi< T > * integrate< 2 >( quadratureGrid, [&] ( CArray< T, 2 > const & r12V )
   {
-    CArray< T, 3 > const xyz12 = sphericalToCartesian( r12V[ 0 ], r12V[ 1 ], T {} );
-      
-    T const x2 = r1C[ 0 ] + xyz12[ 0 ];
-    T const y2 = r1C[ 1 ] + xyz12[ 1 ];
-    T const z2 = r1C[ 2 ] + xyz12[ 2 ];
+    Cartesian< T > const r12C = Spherical< T >{ r12V[ 0 ], r12V[ 1 ], T {} };
+    
+    Cartesian< T > const r2C = r1C + r12C;
 
-    T const r2 = std::hypot( x2, y2, z2 );
-    T const theta2 = std::acos( z2 / (r2 + std::numeric_limits< T >::epsilon()) );
+    T const r2 = r2C.r();
+    T const theta2 = std::acos( r2C.z() / (r2 + std::numeric_limits< T >::epsilon()) );
     // Here we set phi2 to be zero because of an assumed symmetry of the orbitals.
 
     T const r12 = r12V[ 0 ];
@@ -124,7 +122,7 @@ T evaluateR12Integral(
     T const r2Value = b2.radialComponent( r2 ) * b4.radialComponent( r2 );
     T const a2ValueMagnitude = sphericalHarmonicMagnitude( b2.l, b2.m, theta2 ) * sphericalHarmonicMagnitude( b4.l, b4.m, theta2 );
 
-    return r2Value * a2ValueMagnitude * f( r1, r2, r12 );
+    return r2Value * a2ValueMagnitude * f( r1, r1C, r12, r12C, r2 );
   } );
 }
 
@@ -174,19 +172,20 @@ Array4d< std::complex< T > > integrateAllR1R12(
   forAll< DefaultPolicy< PolicyType > >( r1Grid.size( 1 ),
     [&basisFunctions, f, r1Grid=r1Grid.toViewConst(), r2Grid=r2Grid.toViewConst(), nBasis, answer=answer.toView()] ( IndexType const idx )
     {
-      CArray< T, 3 > const r1V { r1Grid( 0, idx ), r1Grid( 1, idx ), r1Grid( 2, idx ) };
+      Spherical< T > const r1S { r1Grid( 0, idx ), r1Grid( 1, idx ), r1Grid( 2, idx ) };
       T const r1Weight = r1Grid( 3, idx );
 
-      CArray< T, 3 > const xyz1 = sphericalToCartesian( r1Grid( 0, idx ), r1Grid( 1, idx ), r1Grid( 2, idx ) );
+      Cartesian< T > const r1C = r1S;
 
       for( IndexType b2 = 0; b2 < nBasis; ++b2 )
       {
-        for( IndexType b4 = b2; b4 < nBasis; ++b4 )
+        // for( IndexType b4 = b2; b4 < nBasis; ++b4 )
+        for( IndexType b4 = 0; b4 < nBasis; ++b4 )
         {
           T const innerIntegral = evaluateR12Integral(
             r2Grid,
-            r1Grid( 0, idx ),
-            xyz1,
+            r1S.r(),
+            r1C,
             basisFunctions[ b2 ],
             basisFunctions[ b4 ],
             f );
@@ -198,8 +197,8 @@ Array4d< std::complex< T > > integrateAllR1R12(
             {
               ATOMIC_BASIS const & bf3 = basisFunctions[ b3 ];
 
-              T const r1Value = bf1.radialComponent( r1V[ 0 ] ) * bf3.radialComponent( r1V[ 0 ] );
-              std::complex< T > const a1Value = conj( sphericalHarmonic( bf1.l, bf1.m, r1V[ 1 ], r1V[ 2 ] ) ) * sphericalHarmonic( bf3.l, bf3.m, r1V[ 1 ], r1V[ 2 ] );
+              T const r1Value = bf1.radialComponent( r1S.r() ) * bf3.radialComponent( r1S.r() );
+              std::complex< T > const a1Value = conj( sphericalHarmonic( bf1.l, bf1.m, r1S.theta(), r1S.phi() ) ) * sphericalHarmonic( bf3.l, bf3.m, r1S.theta(), r1S.phi() );
               
               std::complex< T > const addition = innerIntegral * r1Weight * a1Value * r1Value;
               atomicAdd< PolicyType >( &answer( b1, b2, b3, b4 ), addition );
@@ -210,19 +209,19 @@ Array4d< std::complex< T > > integrateAllR1R12(
     }
   );
 
-  for( IndexType b1 = 0; b1 < nBasis; ++b1 )
-  {
-    for( IndexType b2 = 0; b2 < nBasis; ++b2 )
-    {
-      for( IndexType b3 = 0; b3 < nBasis; ++b3 )
-      {
-        for( IndexType b4 = b2 + 1; b4 < nBasis; ++b4 )
-        {
-          answer( b1, b4, b3, b2 ) = answer( b1, b2, b3, b4 );
-        }
-      }
-    }
-  }
+  // for( IndexType b1 = 0; b1 < nBasis; ++b1 )
+  // {
+  //   for( IndexType b2 = 0; b2 < nBasis; ++b2 )
+  //   {
+  //     for( IndexType b3 = 0; b3 < nBasis; ++b3 )
+  //     {
+  //       for( IndexType b4 = b2 + 1; b4 < nBasis; ++b4 )
+  //       {
+  //         answer( b1, b4, b3, b2 ) = answer( b1, b2, b3, b4 );
+  //       }
+  //     }
+  //   }
+  // }
 
   return answer;
 }

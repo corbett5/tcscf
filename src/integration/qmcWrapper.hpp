@@ -97,17 +97,16 @@ class QMCCache
 public:
   static constexpr int NDIM = NDIM_P;
   using Real = REAL;
+  using Integrator = integrators::Qmc< Real, Real, NDIM, integrators::transforms::None::type >;
 
   QMCCache( IndexType const minGridSize ):
-    _points( 1 )
+    _points( 1, 2 * Integrator {}.get_next_n( minGridSize ) )
   {
-    integrators::Qmc< Real, Real, NDIM, integrators::transforms::None::type > integrator;
+    Integrator integrator;
     integrator.maxeval = 1;
     integrator.minn = minGridSize;
     integrator.minm = 2;
     
-    _points.reserveValues( 2 * integrator.get_next_n( minGridSize ) );
-
     auto functor = internal::createFunctor( [this] ( CArray< Real, NDIM > const & x )
     {
       _points.template emplaceBackAtomic< Atomic< ParallelHost > >( 0, x );

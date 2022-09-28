@@ -263,6 +263,12 @@ REAL dot( Spherical< REAL > const & v1, Spherical< REAL > const & v2 )
   return v1.r() * v2.r() * ( sinTheta1 * sinTheta2 * std::cos( v1.phi() - v2.phi() ) + cosTheta1 * cosTheta2 );
 }
 
+template< typename REAL >
+constexpr REAL calculateR12( Spherical< REAL > const & v1, Spherical< REAL > const & v2 )
+{
+  return std::sqrt( std::pow( v1.r(), 2 ) + std::pow( v2.r(), 2 ) - 2 * dot( v1, v2 ) );
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Matrix stuff
 ///////////////////////////////////////////////////////////////////////////////////////////////////

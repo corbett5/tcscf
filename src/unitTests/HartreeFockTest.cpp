@@ -60,29 +60,16 @@ TEST( AtomicHartreeFock, Helium_Ochi )
   AtomicRCSHartreeFock< double > hfCalculator( 2, params );
   Array1d< double > energies;
 
-  int const nIter = 3;
+  int const nIter = 30;
   for( int iter = 0; iter < nIter; ++iter )
   {
     Array2d< double > const coreMatrix( nBasis, nBasis );
     fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
-    
-    // Array4d< std::complex< double > > twoElectronTerms = integration::integrateAllR1R12< double >( r1GridSize, r2GridSize, basisFunctions,
-    //   [] ( double const r1, Cartesian< double > const & r1C, double const r12, Cartesian< double > const & r12C, double const r2 )
-    //   {
-    //     LVARRAY_UNUSED_VARIABLE( r1 );
-    //     LVARRAY_UNUSED_VARIABLE( r1C );
-    //     LVARRAY_UNUSED_VARIABLE( r12C );
-    //     LVARRAY_UNUSED_VARIABLE( r2 );
-    //     return 1 / r12;
-    //   }
-    // );
 
     Array4d< std::complex< double > > twoElectronTerms = integration::integrateAllR1R12< double >( r1GridSize, r2GridSize, basisFunctions,
-      [] ( double const r1, double const r2, double const r12 )
+      [] ( Spherical< double > const & r1, Spherical< double > const & r2 )
       {
-        LVARRAY_UNUSED_VARIABLE( r1 );
-        LVARRAY_UNUSED_VARIABLE( r2 );
-        return 1 / r12;
+        return 1 / calculateR12( r1, r2 );
       }
     );
 

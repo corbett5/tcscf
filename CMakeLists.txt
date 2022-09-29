@@ -89,22 +89,6 @@ macro(find_and_register)
 
 endmacro(find_and_register)
 
-
-################################
-# BLAS/LAPACK
-################################
-
-include(cmake/FindMathLibraries.cmake)
-
-blt_import_library(NAME blas
-                   TREAT_INCLUDES_AS_SYSTEM ON
-                   LIBRARIES ${BLAS_LIBRARIES})
-
-blt_import_library(NAME lapack
-                   DEPENDS_ON blas
-                   TREAT_INCLUDES_AS_SYSTEM ON
-                   LIBRARIES ${LAPACK_LIBRARIES})
-
 ################################
 # Adiak
 ################################

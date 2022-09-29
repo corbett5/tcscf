@@ -13,7 +13,6 @@ endif()
 # Add the standard tests
 #
 set( portedKernel_test_sources
-     blasLapackInterfaceTest.cpp
      AtomicBasisTest.cpp
      HartreeFockTest.cpp
      IntegrationTest.cpp )

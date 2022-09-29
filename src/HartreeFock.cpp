@@ -2,6 +2,8 @@
 
 #include "caliperInterface.hpp"
 
+#include "dense/eigenDecomposition.hpp"
+
 namespace tcscf
 {
 
@@ -167,11 +169,11 @@ void RCSHartreeFock< T >::compute(
     LVARRAY_LOG_VAR( energy );
     previousEnergy = energy;
 
-    if( orthogonal )
-    {
-      hermitianEigendecomposition( fockOperator.toView(), eigenvalues.toView() );
-    }
-    else
+    // if( orthogonal )
+    // {
+    //   hermitianEigendecomposition( fockOperator.toView(), eigenvalues.toView() );
+    // }
+    // else
     {
       LVARRAY_ERROR( "Generalized eigenvalue problem not supported yet" );
     }
@@ -180,8 +182,9 @@ void RCSHartreeFock< T >::compute(
   }
 }
 
+
 template< typename REAL >
-std::complex< REAL > AtomicRCSHartreeFock< REAL >::iteration(
+REAL AtomicRCSHartreeFock< REAL >::compute(
   ArrayView2d< REAL const > const & oneElectronTerms,
   ArrayView4d< std::complex< REAL > const > const & twoElectronTerms )
 {
@@ -196,49 +199,58 @@ std::complex< REAL > AtomicRCSHartreeFock< REAL >::iteration(
 
   LVARRAY_ERROR_IF_NE( density.size( 0 ), int( params.size() ) );
   LVARRAY_ERROR_IF_NE( density.size( 1 ), int( params.size() ) );
-  
-  internal::constructAtomicFockOperator< Real >(
-    fockOperator.toView(),
-    oneElectronTerms,
-    twoElectronTerms,
-    density.toViewConst(),
-    params );
 
-  std::complex< Real > const energy = internal::calculateEnergy(
-    fockOperator.toViewConst(),
-    oneElectronTerms,
-    density.toViewConst() );
+  LvArray::dense::EigenDecompositionOptions eigenDecompositionOptions(
+    LvArray::dense::EigenDecompositionOptions::EIGENVALUES_AND_RIGHT_VECTORS,
+    1,
+    nElectrons );
 
-  hermitianEigendecomposition( fockOperator.toView(), eigenvalues.toView() );
+  Real energy = std::numeric_limits< Real >::max();
 
-  internal::getNewDensity( nElectrons, density, fockOperator.toViewConst() );
-
-  return energy;
-}
-
-template< typename REAL >
-std::complex< REAL > AtomicRCSHartreeFock< REAL >::compute(
-  ArrayView2d< REAL const > const & oneElectronTerms,
-  ArrayView4d< std::complex< REAL > const > const & twoElectronTerms,
-  int const maxIter )
-{
-  TCSCF_MARK_FUNCTION;
-
-  std::complex< Real > previousEnergy = std::numeric_limits< Real >::max();
-
-  for( int iter = 0; iter < maxIter; ++iter )
+  for( int iter = 0; iter < 1000; ++iter )
   {
-    previousEnergy = iteration( oneElectronTerms, twoElectronTerms );
+    internal::constructAtomicFockOperator< Real >(
+      fockOperator.toView(),
+      oneElectronTerms,
+      twoElectronTerms,
+      density.toViewConst(),
+      params );
+
+    Real const newEnergy = internal::calculateEnergy(
+      fockOperator.toViewConst(),
+      oneElectronTerms,
+      density.toViewConst() ).real();
+
+    if( std::abs( (newEnergy - energy) / energy ) < 10 * std::numeric_limits< Real >::epsilon() )
+    {
+      return newEnergy;
+    }
+
+    energy = newEnergy;
+
+    LvArray::dense::heevr(
+      LvArray::dense::BuiltInBackends::LAPACK,
+      eigenDecompositionOptions,
+      fockOperator.toView(),
+      eigenvalues.toView(),
+      eigenvectors.toView(),
+      _support.toView(),
+      _workspace,
+      LvArray::dense::SymmetricMatrixStorageType::UPPER_TRIANGULAR
+    );
+
+    internal::getNewDensity( nElectrons, density, eigenvectors.toViewConst() );
   }
 
-  return previousEnergy;
+  LVARRAY_ERROR( "Did not converge :(" );
+  return std::numeric_limits< Real >::max();
 }
 
 // Explicit instantiations.
 
 // TODO: Add support for real matrices
 // template struct RCSHartreeFock< float >;
-// template struct RCSHartreeFock< double>;
+// template struct RCSHartreeFock< double >;
 
 template struct RCSHartreeFock< std::complex< float > >;
 template struct RCSHartreeFock< std::complex< double > >;

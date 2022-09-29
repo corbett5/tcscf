@@ -5,33 +5,69 @@
 #
 set( tcscf_headers
 	AtomicBasis.hpp
-    blasLapackInterface.hpp
     caliperInterface.hpp
     HartreeFock.hpp
     HydrogenLikeBasis.hpp
+    jastrowFunctions.hpp
     LvArrayInterface.hpp
     mathFunctions.hpp
     OchiBasis.hpp
-    qmcWrapper.hpp
+    RAJAInterface.hpp
     setup.hpp
+    
     integration/changeOfVariables.hpp
     integration/ChebyshevGauss.hpp
     integration/Lebedev.hpp
+    integration/qmcWrapper.hpp
     integration/quadrature.hpp
+    integration/TreutlerAhlrichsLebedev.hpp
+    
+    integration/data/LebedevData_3.hpp
+    integration/data/LebedevData_5.hpp
+    integration/data/LebedevData_7.hpp
+    integration/data/LebedevData_9.hpp
+    integration/data/LebedevData_11.hpp
+    integration/data/LebedevData_13.hpp
+    integration/data/LebedevData_15.hpp
+    integration/data/LebedevData_17.hpp
+    integration/data/LebedevData_19.hpp
+    integration/data/LebedevData_21.hpp
+    integration/data/LebedevData_23.hpp
+    integration/data/LebedevData_25.hpp
+    integration/data/LebedevData_27.hpp
+    integration/data/LebedevData_29.hpp
+    integration/data/LebedevData_31.hpp
+    integration/data/LebedevData_35.hpp
+    integration/data/LebedevData_41.hpp
+    integration/data/LebedevData_47.hpp
+    integration/data/LebedevData_53.hpp
+    integration/data/LebedevData_59.hpp
+    integration/data/LebedevData_65.hpp
+    integration/data/LebedevData_71.hpp
+    integration/data/LebedevData_77.hpp
+    integration/data/LebedevData_83.hpp
+    integration/data/LebedevData_89.hpp
+    integration/data/LebedevData_95.hpp
+    integration/data/LebedevData_101.hpp
+    integration/data/LebedevData_107.hpp
+    integration/data/LebedevData_113.hpp
+    integration/data/LebedevData_119.hpp
+    integration/data/LebedevData_125.hpp
+    integration/data/LebedevData_131.hpp
 )
 
 #
 # Specify all sources
 #
 set( tcscf_sources
-     blasLapackInterface.cpp
      caliperInterface.cpp
      HartreeFock.cpp
      setup.cpp
+
      integration/Lebedev.cpp
 )
 
-set( dependencyList ${dependencyList} blas lapack gsl adiak lvarray optionparser )
+set( dependencyList ${dependencyList} blas lapack gsl adiak lvarray lvarraydense optionparser )
 
 if( ENABLE_OPENMP )
     set( dependencyList ${dependencyList} openmp )

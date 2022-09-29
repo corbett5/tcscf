@@ -1,8 +1,8 @@
 #pragma once
 
-#include "blasLapackInterface.hpp"
-
 #include "AtomicBasis.hpp"
+
+#include "dense/common.hpp"
 
 namespace tcscf
 {
@@ -53,27 +53,27 @@ struct AtomicRCSHartreeFock
     params( atomicParams ),
     density( params.size(), params.size() ),
     fockOperator( params.size(), params.size() ),
-    eigenvalues( params.size() )
+    eigenvalues( numElectrons ),
+    eigenvectors( params.size(), numElectrons ),
+    _support( 2 * numElectrons )
   {}
 
   /**
    */
-  std::complex< REAL > iteration(
-    ArrayView2d< REAL const > const & oneElectronTerms,
-    ArrayView4d< std::complex< REAL > const > const & twoElectronTerms );
-
-  /**
-   */
-  std::complex< REAL > compute(
+  Real compute(
     ArrayView2d< Real const > const & oneElectronTerms,
-    ArrayView4d< std::complex< Real > const > const & twoElectronTerms,
-    int const maxIter );
+    ArrayView4d< std::complex< Real > const > const & twoElectronTerms );
 
   int const nElectrons;
   std::vector< AtomicParams > const params;
   Array2d< std::complex< Real > > const density;
   Array2d< std::complex< Real >, RAJA::PERM_JI > const fockOperator;
   Array1d< Real > const eigenvalues;
+  Array2d< std::complex< Real >, RAJA::PERM_JI > const eigenvectors;
+
+private:
+  LvArray::dense::ArrayWorkspace< std::complex< Real >, LvArray::ChaiBuffer > _workspace;
+  Array1d< int > _support;
 };
 
 } // namespace tcscf

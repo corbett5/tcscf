@@ -4,6 +4,9 @@
 #include "ChebyshevGauss.hpp"
 #include "changeOfVariables.hpp"
 
+// TODO move this out as well
+#include "qmcWrapper.hpp"
+
 #include "../RAJAInterface.hpp"
 
 namespace tcscf::integration
@@ -75,32 +78,6 @@ auto integrate(
 template< typename T, typename ATOMIC_BASIS, typename F >
 T evaluateR12Integral(
   ArrayView2d< T const > const & quadratureGrid,
-  CArray< T, 3 > const & r1V,
-  ATOMIC_BASIS const & b2,
-  ATOMIC_BASIS const & b4,
-  F && f )
-{
-  return 2 * pi< T > * integrate< 2 >( quadratureGrid, [&] ( CArray< T, 2 > const & r2V )
-  {
-    T const r1 = r1V[ 0 ];
-    T const theta1 = r1V[ 1 ];
-    T const phi1 = r1V[ 2 ];
-    
-    T const r2 = r2V[ 0 ];
-    T const theta2 = r2V[ 1 ];
-
-    T const r12 = calculateR12( r1, theta1, phi1, r2, theta2, T {} );
-
-    T const r2Value = b2.radialComponent( r2 ) * b4.radialComponent( r2 );
-    T const a2ValueMagnitude = sphericalHarmonicMagnitude( b2.l, b2.m, theta2 ) * sphericalHarmonicMagnitude( b4.l, b4.m, theta2 );
-
-    return r2Value * a2ValueMagnitude * f( r1, r2, r12 );
-  } );
-}
-
-template< typename T, typename ATOMIC_BASIS, typename F >
-T evaluateR12Integral(
-  ArrayView2d< T const > const & quadratureGrid,
   T const r1,
   Cartesian< T > const & r1C,
   ATOMIC_BASIS const & b2,
@@ -143,8 +120,7 @@ Array4d< std::complex< T > > integrateAllR1R12(
   QMCCache< 3, T > const qmcCacheR1( nQMC1 );
   QMCCache< 2, T > const qmcCacheR2( nQMC2 );
 
-  // constexpr changeOfVariables::TreutlerAhlrichsM4< T > rChange( 0, 0.9 );
-  constexpr changeOfVariables::XOver1mX< T > rChange;
+  constexpr changeOfVariables::TreutlerAhlrichsM4< T > rChange( 0, 0.9 );
   constexpr changeOfVariables::Linear< T > thetaChange{ pi< T > };
   constexpr changeOfVariables::Linear< T > phiChange{ 2 * pi< T > };
 

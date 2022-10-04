@@ -7,6 +7,11 @@ namespace tcscf
 
 struct CommandLineOptions
 {
+  int nMax;
+  int lMax;
+  double initialAlpha;
+  int r1GridSize;
+  int r2GridSize;
   std::string caliperArgs = "";
   bool suppressMoveLogging = false;
 };

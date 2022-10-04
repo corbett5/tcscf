@@ -88,7 +88,7 @@ T evaluateR12Integral(
   {
     Cartesian< T > const r12C = Spherical< T >{ r12V[ 0 ], r12V[ 1 ], T {} };
     
-    Cartesian< T > const r2C = r1C + r12C;
+    Cartesian< T > const r2C = r1C - r12C;
 
     T const r2 = r2C.r();
     T const theta2 = std::acos( r2C.z() / (r2 + std::numeric_limits< T >::epsilon()) );

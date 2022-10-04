@@ -232,6 +232,11 @@ struct Cartesian
     return { _x + other._x, _y + other._y, _z + other._z };
   }
 
+  constexpr Cartesian operator-( Cartesian const & other ) const
+  {
+    return { _x - other._x, _y - other._y, _z - other._z };
+  }
+
   constexpr void scaledAdd( REAL const alpha, Cartesian const other )
   {
     _x = _x + alpha * other._x;

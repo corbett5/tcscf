@@ -50,6 +50,14 @@ using ArrayView2d = ArrayView< T, 2, USD >;
 template< typename T, typename PERM=RAJA::PERM_IJ >
 using Array2d = Array< T, 2, PERM >;
 
+/// A three dimensional view.
+template< typename T, int USD=1 >
+using ArrayView3d = ArrayView< T, 3, USD >;
+
+/// A three dimensional array.
+template< typename T, typename PERM=RAJA::PERM_IJK >
+using Array3d = Array< T, 3, PERM >;
+
 /// A four dimensional array.
 template< typename T, typename PERM=RAJA::PERM_IJKL >
 using Array4d = Array< T, 4, PERM >;

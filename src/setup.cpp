@@ -43,11 +43,11 @@ struct Arg : public option::Arg
   }
 
   /**
-   * @brief Parse a numeric string option.
+   * @brief Parse an integer string option.
    * @param option the option to parse.
    * @return option::ARK_OK if the parse was successful, option::ARG_ILLEGAL otherwise.
    */
-  static option::ArgStatus numeric( const option::Option & option, bool )
+  static option::ArgStatus integer( const option::Option & option, bool )
   {
     char * endptr = nullptr;
     if((option.arg != nullptr) && strtol( option.arg, &endptr, 10 )) {}
@@ -57,6 +57,24 @@ struct Arg : public option::Arg
     }
 
     LVARRAY_LOG( "Error: " << option.name << " requires a long-int argument!" );
+    return option::ARG_ILLEGAL;
+  }
+
+  /**
+   * @brief Parse a floating point string option.
+   * @param option the option to parse.
+   * @return option::ARK_OK if the parse was successful, option::ARG_ILLEGAL otherwise.
+   */
+  static option::ArgStatus floatingPoint( const option::Option & option, bool )
+  {
+    char * endptr = nullptr;
+    if((option.arg != nullptr) && strtod( option.arg, &endptr )) {}
+    if((endptr != option.arg) && (*endptr == 0))
+    {
+      return option::ARG_OK;
+    }
+
+    LVARRAY_LOG( "Error: " << option.name << " requires a floating point argument!" );
     return option::ARG_ILLEGAL;
   }
 };
@@ -70,6 +88,11 @@ CommandLineOptions parseCommandLineOptions( int argc, char ** argv )
   {
     UNKNOWN,
     HELP,
+    NMAX,
+    LMAX,
+    ALPHA,
+    R1,
+    R2,
     TIMERS,
     SUPPRESS_MOVE_LOGGING
   };
@@ -78,6 +101,11 @@ CommandLineOptions parseCommandLineOptions( int argc, char ** argv )
   {
     { UNKNOWN, 0, "", "", Arg::unknown, "USAGE: [options]\n\nOptions:" },
     { HELP, 0, "?", "help", Arg::None, "\t-?, --help" },
+    { NMAX, 0, "n", "nMax", Arg::integer, "\t-n, --nMax, \t Maximum principle quantum number." },
+    { LMAX, 0, "l", "lMax", Arg::integer, "\t-l, --lMax, \t Maximum angular quantum number." },
+    { ALPHA, 0, "a", "alpha", Arg::floatingPoint, "\t-a, --alpha, \t Initial orbital exponent." },
+    { R1, 0, "r1", "r1GridSize", Arg::integer, "\t-r1, --r1GridSize, \t Grid size used for r1 integration." },
+    { R2, 0, "r2", "r2GridSize", Arg::integer, "\t-r2, --r2GridSize, \t Grid size used for r2 integration." },
     { TIMERS, 0, "c", "caliper", Arg::nonEmpty, "\t-c, --caliper, \t String specifying the type of timer output." },
     { SUPPRESS_MOVE_LOGGING, 0, "", "suppress-move-logging", Arg::None, "\t--suppress-move-logging \t Suppress logging of host-device data migration" },
     { 0, 0, nullptr, nullptr, nullptr, nullptr }
@@ -117,6 +145,36 @@ CommandLineOptions parseCommandLineOptions( int argc, char ** argv )
       }
       case HELP:
       {
+        break;
+      }
+      case NMAX:
+      {
+        commandLineOptions.nMax = std::stol( opt.arg );
+        LVARRAY_ERROR_IF_LT( commandLineOptions.nMax, 0 );
+        break;
+      }
+      case LMAX:
+      {
+        commandLineOptions.lMax = std::stol( opt.arg );
+        LVARRAY_ERROR_IF_LT( commandLineOptions.lMax, 0 );
+        break;
+      }
+      case ALPHA:
+      {
+        commandLineOptions.initialAlpha = std::stod( opt.arg );
+        LVARRAY_ERROR_IF_LE( commandLineOptions.initialAlpha, 0 );
+        break;
+      }
+      case R1:
+      {
+        commandLineOptions.r1GridSize = std::stol( opt.arg );
+        LVARRAY_ERROR_IF_LE( commandLineOptions.r1GridSize, 0 );
+        break;
+      }
+      case R2:
+      {
+        commandLineOptions.r2GridSize = std::stol( opt.arg );
+        LVARRAY_ERROR_IF_LE( commandLineOptions.r2GridSize, 0 );
         break;
       }
       case TIMERS:

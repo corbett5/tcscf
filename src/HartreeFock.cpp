@@ -321,6 +321,164 @@ void UOSHartreeFock< T >::getNewDensity()
 }
 
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+template< typename T >
+RealType< T > TCHartreeFock< T >::compute(
+  bool const orthogonal,
+  ArrayView2d< T const > const & overlap,
+  ArrayView2d< Real const > const & oneElectronTerms,
+  ArrayView4d< T const > const & twoElectronTermsSameSpin,
+  ArrayView4d< T const > const & twoElectronTermsOppositeSpin )
+{
+  TCSCF_MARK_FUNCTION;
+
+  LVARRAY_ERROR_IF_NE( oneElectronTerms.size( 1 ), basisSize );
+
+  LVARRAY_ERROR_IF_NE( twoElectronTermsSameSpin.size( 0 ), basisSize );
+  LVARRAY_ERROR_IF_NE( twoElectronTermsSameSpin.size( 1 ), basisSize );
+  LVARRAY_ERROR_IF_NE( twoElectronTermsSameSpin.size( 2 ), basisSize );
+  LVARRAY_ERROR_IF_NE( twoElectronTermsSameSpin.size( 3 ), basisSize );
+
+  LVARRAY_ERROR_IF_NE( twoElectronTermsOppositeSpin.size( 0 ), basisSize );
+  LVARRAY_ERROR_IF_NE( twoElectronTermsOppositeSpin.size( 1 ), basisSize );
+  LVARRAY_ERROR_IF_NE( twoElectronTermsOppositeSpin.size( 2 ), basisSize );
+  LVARRAY_ERROR_IF_NE( twoElectronTermsOppositeSpin.size( 3 ), basisSize );
+
+  if( !orthogonal )
+  {
+    LVARRAY_ERROR_IF_NE( overlap.size( 0 ), basisSize );
+    LVARRAY_ERROR_IF_NE( overlap.size( 1 ), basisSize );
+  }
+
+  CArray< LvArray::dense::EigenDecompositionOptions, 2 > const eigenDecompositionOptions { {
+    { LvArray::dense::EigenDecompositionOptions::EIGENVALUES_AND_RIGHT_VECTORS,
+      1,
+      nElectrons[ 0 ] },
+    { LvArray::dense::EigenDecompositionOptions::EIGENVALUES_AND_RIGHT_VECTORS,
+      1,
+      nElectrons[ 1 ] }
+  } };
+
+  Real energy = std::numeric_limits< Real >::max();
+
+  // TODO: figure out a way to initialize the density in a non-zero manner.
+
+  for( int iter = 0; iter < 1000; ++iter )
+  {
+    constructFockOperator( oneElectronTerms, twoElectronTermsSameSpin, twoElectronTermsOppositeSpin );
+
+    Real const newEnergy = calculateEnergy( oneElectronTerms ).real();
+
+    if( std::abs( (newEnergy - energy) / energy ) < 10 * std::numeric_limits< Real >::epsilon() )
+    {
+      return newEnergy;
+    }
+
+    energy = newEnergy;
+
+    if( orthogonal )
+    {
+      for( int spin = 0; spin < 2; ++spin )
+      {
+        LvArray::dense::heevr(
+          LvArray::dense::BuiltInBackends::LAPACK,
+          eigenDecompositionOptions[ spin ],
+          fockOperator[ spin ],
+          eigenvalues[ spin ],
+          eigenvectors[ spin ],
+          _support.toSlice(),
+          _workspace,
+          LvArray::dense::SymmetricMatrixStorageType::UPPER_TRIANGULAR );
+      }
+    }
+    else
+    {
+      LVARRAY_ERROR( "Generalized eigenvalue problem not yet supported." );
+    }
+
+    getNewDensity();
+  }
+
+  LVARRAY_ERROR( "Did not converge :(" );
+  return std::numeric_limits< Real >::max();
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+template< typename T >
+void TCHartreeFock< T >::constructFockOperator(
+  ArrayView2d< Real const > const & oneElectronTerms,
+  ArrayView4d< T const > const & twoElectronTermsSameSpin,
+  ArrayView4d< T const > const & twoElectronTermsOppositeSpin )
+{
+  TCSCF_MARK_FUNCTION;
+
+  for( int spin = 0; spin < 2; ++spin )
+  {
+    for( IndexType u = 0; u < basisSize; ++u )
+    {
+      for( IndexType v = 0; v < basisSize; ++v )
+      {
+        T tmp = 0;
+        for( IndexType a = 0; a < basisSize; ++a )
+        {
+          for( IndexType b = 0; b < basisSize; ++b)
+          {
+            tmp += density( spin, a, b ) * (twoElectronTermsSameSpin( u, b, v, a ) - twoElectronTermsSameSpin( u, b, a, v ));
+            tmp += density( 1 - spin, a, b ) * twoElectronTermsOppositeSpin( u, b, v, a );
+          }
+        }
+
+        fockOperator( spin, u, v ) = oneElectronTerms( u, v ) + tmp / 2;
+      }
+    }
+  }
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+template< typename T >
+T TCHartreeFock< T >::calculateEnergy( ArrayView2d< Real const > const & oneElectronTerms ) const
+{
+  TCSCF_MARK_FUNCTION;
+
+  T energy = 0;
+  for( int u = 0; u < basisSize; ++u )
+  {
+    for( int v = 0; v < basisSize; ++v )
+    {
+      energy += density( 0, v, u ) * (oneElectronTerms( u, v ) + fockOperator( 0, u, v )) +
+                density( 1, v, u ) * (oneElectronTerms( u, v ) + fockOperator( 1, u, v ));
+    }
+  }
+
+  return energy / 2;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+template< typename T >
+void TCHartreeFock< T >::getNewDensity()
+{
+  TCSCF_MARK_FUNCTION;
+
+  for( int spin = 0; spin < 2; ++spin )
+  {
+    // TODO: replace with with matrix multiplication C C^\dagger
+    for( IndexType u = 0; u < basisSize; ++u )
+    {
+      for( IndexType v = 0; v < basisSize; ++v )
+      {
+        T tmp = 0;
+        for( IndexType a = 0; a < nElectrons[ spin ]; ++a )
+        {
+          tmp += eigenvectors( spin, u, a ) * conj( eigenvectors( spin, v, a ) );
+        }
+
+        density( spin, u, v ) = tmp;
+      }
+    }
+  }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 // template< typename T >
 // RealType< T > RCSNonHermitianHartreeFock< T >::compute(
@@ -452,5 +610,8 @@ template struct RCSHartreeFock< std::complex< double > >;
 
 template struct UOSHartreeFock< std::complex< float > >;
 template struct UOSHartreeFock< std::complex< double > >;
+
+template struct TCHartreeFock< std::complex< float > >;
+template struct TCHartreeFock< std::complex< double > >;
 
 } // namespace tcscf

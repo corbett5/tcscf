@@ -104,8 +104,8 @@ CommandLineOptions parseCommandLineOptions( int argc, char ** argv )
     { NMAX, 0, "n", "nMax", Arg::integer, "\t-n, --nMax, \t Maximum principle quantum number." },
     { LMAX, 0, "l", "lMax", Arg::integer, "\t-l, --lMax, \t Maximum angular quantum number." },
     { ALPHA, 0, "a", "alpha", Arg::floatingPoint, "\t-a, --alpha, \t Initial orbital exponent." },
-    { R1, 0, "r1", "r1GridSize", Arg::integer, "\t-r1, --r1GridSize, \t Grid size used for r1 integration." },
-    { R2, 0, "r2", "r2GridSize", Arg::integer, "\t-r2, --r2GridSize, \t Grid size used for r2 integration." },
+    { R1, 0, "", "r1", Arg::integer, "\t--r1, \t Grid size used for r1 integration." },
+    { R2, 0, "", "r2", Arg::integer, "\t--r2, \t Grid size used for r2 integration." },
     { TIMERS, 0, "c", "caliper", Arg::nonEmpty, "\t-c, --caliper, \t String specifying the type of timer output." },
     { SUPPRESS_MOVE_LOGGING, 0, "", "suppress-move-logging", Arg::None, "\t--suppress-move-logging \t Suppress logging of host-device data migration" },
     { 0, 0, nullptr, nullptr, nullptr, nullptr }

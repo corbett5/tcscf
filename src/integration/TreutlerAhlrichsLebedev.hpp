@@ -156,8 +156,8 @@ Array4d< std::complex< T > > integrateAllR1R12(
 
       for( IndexType b2 = 0; b2 < nBasis; ++b2 )
       {
-        // for( IndexType b4 = b2; b4 < nBasis; ++b4 )
-        for( IndexType b4 = 0; b4 < nBasis; ++b4 )
+        for( IndexType b4 = b2; b4 < nBasis; ++b4 )
+        // for( IndexType b4 = 0; b4 < nBasis; ++b4 )
         {
           T const innerIntegral = evaluateR12Integral(
             r2Grid,
@@ -186,19 +186,19 @@ Array4d< std::complex< T > > integrateAllR1R12(
     }
   );
 
-  // for( IndexType b1 = 0; b1 < nBasis; ++b1 )
-  // {
-  //   for( IndexType b2 = 0; b2 < nBasis; ++b2 )
-  //   {
-  //     for( IndexType b3 = 0; b3 < nBasis; ++b3 )
-  //     {
-  //       for( IndexType b4 = b2 + 1; b4 < nBasis; ++b4 )
-  //       {
-  //         answer( b1, b4, b3, b2 ) = answer( b1, b2, b3, b4 );
-  //       }
-  //     }
-  //   }
-  // }
+  for( IndexType b1 = 0; b1 < nBasis; ++b1 )
+  {
+    for( IndexType b2 = 0; b2 < nBasis; ++b2 )
+    {
+      for( IndexType b3 = 0; b3 < nBasis; ++b3 )
+      {
+        for( IndexType b4 = b2 + 1; b4 < nBasis; ++b4 )
+        {
+          answer( b1, b4, b3, b2 ) = answer( b1, b2, b3, b4 );
+        }
+      }
+    }
+  }
 
   return answer;
 }

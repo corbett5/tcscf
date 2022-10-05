@@ -1,0 +1,126 @@
+Note: Google Test filter = *RestrictedClosedShell
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HartreeFock
+[ RUN      ] HartreeFock.RestrictedClosedShell
+nMax = 1, lMax = 0, nBasis = 2, r1 grid size = 2000, r2 grid size = 1000, alpha = 1.355
+energy = -2.831283167 +/- 5.74126252e-06 Ht, error = 0.03039682824 Ht, alpha = 1.341799428
+[       OK ] HartreeFock.RestrictedClosedShell (7373 ms)
+[----------] 1 test from HartreeFock (7373 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (7373 ms total)
+[  PASSED  ] 1 test.
+Umpire            HOST high water mark:  337.5 KB
+Note: Google Test filter = *RestrictedClosedShell
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HartreeFock
+[ RUN      ] HartreeFock.RestrictedClosedShell
+nMax = 2, lMax = 0, nBasis = 3, r1 grid size = 2000, r2 grid size = 1000, alpha = 1.355
+energy = -2.854721682 +/- 1.612881916e-05 Ht, error = 0.006958314045 Ht, alpha = 1.351822277
+[       OK ] HartreeFock.RestrictedClosedShell (12801 ms)
+[----------] 1 test from HartreeFock (12801 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (12801 ms total)
+[  PASSED  ] 1 test.
+Umpire            HOST high water mark:  339.1 KB
+Note: Google Test filter = *RestrictedClosedShell
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HartreeFock
+[ RUN      ] HartreeFock.RestrictedClosedShell
+nMax = 3, lMax = 0, nBasis = 4, r1 grid size = 2000, r2 grid size = 1000, alpha = 1.355
+energy = -2.86006943 +/- 9.305309048e-06 Ht, error = 0.001610565336 Ht, alpha = 1.354289297
+[       OK ] HartreeFock.RestrictedClosedShell (21849 ms)
+[----------] 1 test from HartreeFock (21850 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (21850 ms total)
+[  PASSED  ] 1 test.
+Umpire            HOST high water mark:  342.5 KB
+Note: Google Test filter = *RestrictedClosedShell
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HartreeFock
+[ RUN      ] HartreeFock.RestrictedClosedShell
+nMax = 4, lMax = 0, nBasis = 5, r1 grid size = 2000, r2 grid size = 1000, alpha = 1.355
+energy = -2.861317502 +/- 1.195450831e-05 Ht, error = 0.0003624931537 Ht, alpha = 1.354875256
+[       OK ] HartreeFock.RestrictedClosedShell (29931 ms)
+[----------] 1 test from HartreeFock (29931 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (29931 ms total)
+[  PASSED  ] 1 test.
+Umpire            HOST high water mark:  349.0 KB
+Note: Google Test filter = *RestrictedClosedShell
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HartreeFock
+[ RUN      ] HartreeFock.RestrictedClosedShell
+nMax = 5, lMax = 0, nBasis = 6, r1 grid size = 2000, r2 grid size = 1000, alpha = 1.355
+energy = -2.861602479 +/- 9.470810657e-06 Ht, error = 7.751614032e-05 Ht, alpha = 1.354923934
+[       OK ] HartreeFock.RestrictedClosedShell (42429 ms)
+[----------] 1 test from HartreeFock (42429 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (42429 ms total)
+[  PASSED  ] 1 test.
+Umpire            HOST high water mark:  360.4 KB
+Note: Google Test filter = *RestrictedClosedShell
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HartreeFock
+[ RUN      ] HartreeFock.RestrictedClosedShell
+nMax = 6, lMax = 0, nBasis = 7, r1 grid size = 2000, r2 grid size = 1000, alpha = 1.355
+energy = -2.861661587 +/- 8.726674933e-06 Ht, error = 1.84089924e-05 Ht, alpha = 1.354967256
+[       OK ] HartreeFock.RestrictedClosedShell (58616 ms)
+[----------] 1 test from HartreeFock (58617 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (58617 ms total)
+[  PASSED  ] 1 test.
+Umpire            HOST high water mark:  378.6 KB
+Note: Google Test filter = *RestrictedClosedShell
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HartreeFock
+[ RUN      ] HartreeFock.RestrictedClosedShell
+nMax = 7, lMax = 0, nBasis = 8, r1 grid size = 2000, r2 grid size = 1000, alpha = 1.355
+energy = -2.861677696 +/- 7.199166363e-06 Ht, error = 2.299777457e-06 Ht, alpha = 1.354970469
+[       OK ] HartreeFock.RestrictedClosedShell (76132 ms)
+[----------] 1 test from HartreeFock (76132 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (76132 ms total)
+[  PASSED  ] 1 test.
+Umpire            HOST high water mark:  406.2 KB
+Note: Google Test filter = *RestrictedClosedShell
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HartreeFock
+[ RUN      ] HartreeFock.RestrictedClosedShell
+nMax = 8, lMax = 0, nBasis = 9, r1 grid size = 2000, r2 grid size = 1000, alpha = 1.355
+energy = -2.861677788 +/- 6.248700625e-06 Ht, error = 2.207683773e-06 Ht, alpha = 1.354991438
+[       OK ] HartreeFock.RestrictedClosedShell (96136 ms)
+[----------] 1 test from HartreeFock (96136 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (96136 ms total)
+[  PASSED  ] 1 test.
+Umpire            HOST high water mark:  445.9 KB
+Note: Google Test filter = *RestrictedClosedShell
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HartreeFock
+[ RUN      ] HartreeFock.RestrictedClosedShell
+nMax = 9, lMax = 0, nBasis = 10, r1 grid size = 2000, r2 grid size = 1000, alpha = 1.355
+energy = -2.861681515 +/- 8.004372804e-06 Ht, error = 1.519169117e-06 Ht, alpha = 1.354963441
+[       OK ] HartreeFock.RestrictedClosedShell (116170 ms)
+[----------] 1 test from HartreeFock (116170 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (116170 ms total)
+[  PASSED  ] 1 test.
+Umpire            HOST high water mark:  501.0 KB

@@ -246,8 +246,6 @@ void fillAtomicR12Array(
       return std::complex< Real >{ 0 };
     }
   );
-
-  LVARRAY_LOG_VAR( numEval );
 }
 
 template< typename BASIS, typename T >
@@ -282,8 +280,6 @@ void fillAtomicR12Array(
       return std::complex< Real >{ 0 };
     }
   );
-
-  LVARRAY_LOG_VAR( numEval );
 }
 
 } // namespace tcscf

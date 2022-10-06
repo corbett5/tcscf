@@ -42,6 +42,8 @@ void ochiHF(
   int const r1GridSize,
   int const r2GridSize )
 {
+  constexpr double HF_LIMIT = -2.861679995612;
+
   int const Z = 2;
   int const nSpinUp = 1;
   int const nSpinDown = 1;
@@ -78,6 +80,11 @@ void ochiHF(
         return 1 / r12;
       }
     );
+
+    // Array4d< std::complex< double > > coulombIntegrals( nBasis, nBasis, nBasis, nBasis );
+    // fillAtomicR12Array( basisFunctions, coulombIntegrals );
+
+    std::cout << std::setprecision( 10 );
 
     double energy = 0;
     if constexpr ( std::is_same_v< HF_CALCULATOR, TCHartreeFock< std::complex< double > > > )
@@ -146,8 +153,6 @@ void ochiHF(
 
     // TODO: zero out the two electron electron terms that don't share the same angular coords.
 
-    // LVARRAY_LOG_VAR( energy );
-
     if( nIter - iter <= 10 )
     {
       energies.emplace_back( energy );
@@ -155,12 +160,15 @@ void ochiHF(
 
     alpha = std::sqrt( -2 * hfCalculator.highestOccupiedOrbitalEnergy() );
 
+    printf( "\r    iteration = %4d, energy = %10.6F, error = %e, alpha = %10.6F", iter, energy, std::abs( HF_LIMIT - energy ), alpha );
+    fflush( stdout );
+
     createBasisFunctions( nMax, lMax, alpha, basisFunctions );
   }
 
-  constexpr double HF_LIMIT = -2.861679995612;
+  std::cout << std::endl;
+
   auto [mean, standardDev] = meanAndStd( energies.toViewConst() );
-  std::cout << std::setprecision( 10 );
   LVARRAY_LOG( "energy = " << mean << " +/- " << standardDev <<
                " Ht, error = " << std::abs( HF_LIMIT - mean ) << " Ht, alpha = " << alpha );
 }

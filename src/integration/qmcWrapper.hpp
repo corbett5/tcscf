@@ -228,8 +228,14 @@ auto sphericalCoordinates5DIntegral( F && f )
 
   integrators::Qmc< RETURN_TYPE, COORD_TYPE, 5, integrators::transforms::None::type > integrator;
   integrator.maxeval = 1;
-  integrator.minn = 310577;
+  integrator.minn = 300000;
   auto const result = integrator.integrate( functor );
+  static bool firstTime = true;
+  if( firstTime )
+  {
+    firstTime = false;
+    LVARRAY_LOG_VAR( result.evaluations );
+  }
 
   return 4 * std::pow( pi< COORD_TYPE >, 4 ) * result.integral;
 }

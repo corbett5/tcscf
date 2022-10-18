@@ -175,7 +175,10 @@ private:
   
   /**
    */
-  T calculateEnergy( ArrayView2d< Real const > const & oneElectronTerms ) const;
+  T calculateEnergy(
+    ArrayView2d< Real const > const & oneElectronTerms,
+    ArrayView4d< T const > const & twoElectronTermsSameSpin,
+    ArrayView4d< T const > const & twoElectronTermsOppositeSpin ) const;
 
   /**
    */

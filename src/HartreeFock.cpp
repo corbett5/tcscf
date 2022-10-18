@@ -367,7 +367,7 @@ RealType< T > TCHartreeFock< T >::compute(
   {
     constructFockOperator( oneElectronTerms, twoElectronTermsSameSpin, twoElectronTermsOppositeSpin );
 
-    Real const newEnergy = calculateEnergy( oneElectronTerms ).real();
+    Real const newEnergy = calculateEnergy( oneElectronTerms, twoElectronTermsSameSpin, twoElectronTermsOppositeSpin ).real();
 
     if( std::abs( (newEnergy - energy) / energy ) < 10 * std::numeric_limits< Real >::epsilon() )
     {
@@ -437,21 +437,58 @@ void TCHartreeFock< T >::constructFockOperator(
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 template< typename T >
-T TCHartreeFock< T >::calculateEnergy( ArrayView2d< Real const > const & oneElectronTerms ) const
+T TCHartreeFock< T >::calculateEnergy(
+  ArrayView2d< Real const > const & oneElectronTerms,
+  ArrayView4d< T const > const & twoElectronTermsSameSpin,
+  ArrayView4d< T const > const & twoElectronTermsOppositeSpin ) const
 {
   TCSCF_MARK_FUNCTION;
 
   T energy = 0;
-  for( int u = 0; u < basisSize; ++u )
+  for( IndexType a = 0; a < basisSize; ++a )
   {
-    for( int v = 0; v < basisSize; ++v )
+    for( IndexType b = 0; b < basisSize; ++b )
     {
-      energy += density( 0, v, u ) * (oneElectronTerms( u, v ) + fockOperator( 0, u, v )) +
-                density( 1, v, u ) * (oneElectronTerms( u, v ) + fockOperator( 1, u, v ));
+      energy += density( 0, b, a ) * (2 * oneElectronTerms( a, b ) + fockOperator( 0, a, b ));
+      energy += density( 1, b, a ) * (2 * oneElectronTerms( a, b ) + fockOperator( 1, a, b ));
     }
   }
 
-  return energy / 2;
+  T sameSpinContrib = 0;
+  for( IndexType a = 0; a < basisSize; ++a )
+  {
+    for( IndexType b = 0; b < basisSize; ++b )
+    {
+      for( IndexType c = 0; c < basisSize; ++c )
+      {
+        for( IndexType d = 0; d < basisSize; ++d )
+        {
+          T const totalDensity = density( 0, b, a ) * density( 0, d, c ) + density( 1, b, a ) * density( 1, d, c );
+          sameSpinContrib += totalDensity * (twoElectronTermsSameSpin(a, c, b, d) - twoElectronTermsSameSpin(a, c, d, b));
+        }
+      }
+    }
+  }
+  energy += sameSpinContrib / 4;
+
+  T oppoSpinContrib = 0;
+  for( IndexType a = 0; a < basisSize; ++a )
+  {
+    for( IndexType b = 0; b < basisSize; ++b )
+    {
+      for( IndexType c = 0; c < basisSize; ++c )
+      {
+        for( IndexType d = 0; d < basisSize; ++d )
+        {
+          T const totalDensity = density( 0, b, a ) * density( 1, d, c ) + density( 1, b, a ) * density( 0, d, c );
+          oppoSpinContrib += totalDensity * twoElectronTermsOppositeSpin(a, c, b, d);
+        }
+      }
+    }
+  }
+  energy += oppoSpinContrib / 4;
+
+  return energy / 3;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

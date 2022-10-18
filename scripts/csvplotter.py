@@ -67,6 +67,6 @@ def main(filePath, logX, logY, xLabel, yLabel, title, showLegend, fontSize, func
     plt.show()
 
 
-# main('data.txt', False, True, 'Number of basis functions', 'Error (Ht)', None, False, 20, [Func('nBasis', 'error', 'stddev')])
-# main('data.txt', False, False, 'Number of basis functions', 'Running time (s)', None, False, 20, [Func('nBasis', 'time / 1000')])
-main('qmcData.txt', True, True, 'Number of function evaluations', 'Error (Ht)', None, False, 20, [Func('evaluations', 'error', 'stddev')])
+main('qmcData.txt', True, True, 'Number of function evaluations', 'Error (Ht)', 'QMC error with five basis functions', False, 20, [Func('evaluations', 'error', 'stddev')])
+main('data.txt', False, True, 'Number of basis functions', 'Error (Ht)', 'QMC + multi integral optimization error', False, 20, [Func('nBasis', 'error', 'stddev')])
+main('data.txt', False, False, 'Number of basis functions', 'Running time (s)', 'QMC + multi integral optimization error', False, 20, [Func('nBasis', 'time / 1000')])

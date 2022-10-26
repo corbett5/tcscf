@@ -29,13 +29,16 @@ struct OchiBasisFunction
     l{ lP },
     m{ mP },
     normalization{ std::pow( 2 * alpha, l + 1.5 ) / std::sqrt( truncatedFactorial( n + 2 * l + 2, n ) ) }
-  {}
+  {
+    LVARRAY_ERROR_IF_LT( n, 0 );
+    LVARRAY_ERROR_IF_LT( l, m );
+  }
 
   /**
    * 
    */
   Complex operator()( Real const r, Real const theta, Real const phi ) const
-  { return fnl(r) / r * sphericalHarmonic( l, m, theta, phi ); }
+  { return radialComponent( r ) * sphericalHarmonic( l, m, theta, phi ); }
 
   /**
    * 
@@ -48,6 +51,26 @@ struct OchiBasisFunction
    */
   Real radialComponent( Real const r ) const
   { return normalization * std::pow( r, l ) * assocLaguerre( n, 2 * l + 2, 2 * alpha * r ) * std::exp(-alpha * r); }
+
+  /**
+   * 
+   */
+  Spherical< Real > gradient( Spherical< Real > const & r )
+  {
+    Real const radial = radialComponent( r.r() );
+    Real const Ylm = sphericalHarmonic( l, m, r.theta(), r.phi() );
+
+    Real const dLaguerrePart = (n > 0) *
+      -2 * alpha * normalization * std::pow( r, l ) * std::exp( -alpha * r.r() ) * assocLaguerre( n - 1, 2 * l + 3, 2 * alpha * r.r() );
+
+    Real const Ylmp1 = (l != m) * std::sqrt((l - m) * (l + m + 1)) * cExp( -r.phi() ) * sphericalHarmonic( l, m + 1, r.theta(), r.phi() );
+    
+    Real const rHat = ((l / r.r() - alpha) * radial + dLaguerrePart) * Ylm;
+    Real const thetaHat = (m * Ylm / std::tan( r.theta() ) + Ylmp1) * radial / r.r();
+    Real const phiHat = I< Real > * m * Ylm * radial / (r.r() * std::sin( r.theta() ));
+
+    return { rHat, thetaHat, phiHat };
+  }
 
   Real const alpha;
   int const n;

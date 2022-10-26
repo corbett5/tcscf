@@ -5,8 +5,6 @@
 #include "integration/qmcWrapper.hpp"
 #include "mathFunctions.hpp"
 
-#include "integration/TreutlerAhlrichsLebedev.hpp"
-
 #include <iostream>
 
 namespace tcscf
@@ -243,40 +241,6 @@ void fillAtomicR12Array(
           basisFunctions[ d ] );
       }
 
-      return std::complex< Real >{ 0 };
-    }
-  );
-}
-
-template< typename BASIS, typename T >
-void fillAtomicR12Array(
-  integration::TreutlerAhlrichsLebedev< typename BASIS::Real > quadratureGrid,
-  std::vector< BASIS > const & basisFunctions,
-  ArrayView4d< T > const & array )
-{
-  using Real = typename BASIS::Real;
-
-  int numEval = 0;
-
-  fillTwoElectronSymmetricHermitianArray( array, true,
-    [&basisFunctions, &quadratureGrid, &numEval] ( int const a, int const b, int const c, int const d )
-    {      
-      if( ( basisFunctions[ a ].l == basisFunctions[ c ].l &&
-            basisFunctions[ a ].m == basisFunctions[ c ].m &&
-            basisFunctions[ b ].l == basisFunctions[ d ].l &&
-            basisFunctions[ b ].m == basisFunctions[ d ].m ) ||
-          ( basisFunctions[ a ].l == basisFunctions[ d ].l &&
-            basisFunctions[ a ].m == basisFunctions[ d ].m &&
-            basisFunctions[ b ].l == basisFunctions[ c ].l &&
-            basisFunctions[ b ].m == basisFunctions[ c ].m ) )
-      {
-        ++numEval;
-        return integrateR1R12( quadratureGrid, basisFunctions[ a ], basisFunctions[ b ], basisFunctions[ c ], basisFunctions[ d ],
-          [] ( Real const LVARRAY_UNUSED_ARG( r1 ), Real const LVARRAY_UNUSED_ARG( r2 ), Real const r12 )
-          { return 1.0 / r12; }
-        );
-      }
-      
       return std::complex< Real >{ 0 };
     }
   );

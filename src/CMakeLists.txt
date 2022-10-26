@@ -21,6 +21,7 @@ set( tcscf_headers
     integration/qmcWrapper.hpp
     integration/quadrature.hpp
     integration/TreutlerAhlrichsLebedev.hpp
+    integration/integrateAll.hpp
     
     integration/data/LebedevData_3.hpp
     integration/data/LebedevData_5.hpp

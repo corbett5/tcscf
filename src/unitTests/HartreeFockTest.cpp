@@ -1,9 +1,12 @@
 #include "../setup.hpp"
 #include "../caliperInterface.hpp"
-#include  "../HartreeFock.hpp"
+#include "../HartreeFock.hpp"
 #include "../HydrogenLikeBasis.hpp"
 #include "../OchiBasis.hpp"
 #include "../jastrowFunctions.hpp"
+#include "../integration/integrateAll.hpp"
+#include "../integration/ChebyshevGauss.hpp"
+#include "../integration/changeOfVariables.hpp"
 
 #include "testingCommon.hpp"
 
@@ -70,7 +73,7 @@ void ochiHF(
     Array2d< double > const coreMatrix( nBasis, nBasis );
     fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
     
-    Array4d< std::complex< double > > coulombIntegrals = integration::integrateAllR1R12< double >( r1GridSize, r2GridSize, basisFunctions,
+    Array4d< std::complex< double > > coulombIntegrals = integration::integrateAll< double >( r1GridSize, r2GridSize, basisFunctions,
       [] ( double const r1, Cartesian< double > const & r1C, double const r12, Cartesian< double > const & r12C, double const r2 )
       {
         LVARRAY_UNUSED_VARIABLE( r1 );
@@ -100,7 +103,7 @@ void ochiHF(
 
       jastrowFunctions::Ochi< double > const u { a, a12, c, S };
 
-      Array4d< std::complex< double > > laplacianOpposite = integration::integrateAllR1R12< double >( r1GridSize, r2GridSize, basisFunctions,
+      Array4d< std::complex< double > > laplacianOpposite = integration::integrateAll< double >( r1GridSize, r2GridSize, basisFunctions,
         [&u] ( double const r1, Cartesian< double > const & r1C, double const r12, Cartesian< double > const & r12C, double const r2 )
         {
           Cartesian< double > const r2C = r1C + r12C;
@@ -113,7 +116,7 @@ void ochiHF(
         }
       );
 
-      Array4d< std::complex< double > > gradOpposite = integration::integrateAllR1R12< double >( r1GridSize, r2GridSize, basisFunctions,
+      Array4d< std::complex< double > > gradOpposite = integration::integrateAll< double >( r1GridSize, r2GridSize, basisFunctions,
         [&u] ( double const r1, Cartesian< double > const & r1C, double const r12, Cartesian< double > const & r12C, double const r2 )
         {
           Cartesian< double > const r2C = r1C + r12C;

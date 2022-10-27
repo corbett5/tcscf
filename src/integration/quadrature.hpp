@@ -9,11 +9,29 @@
 namespace tcscf::integration
 {
 
-template< typename REAL, camp::idx_t NDIM >
+/**
+ * 
+ */
+template< typename REAL, int NDIM >
 struct GridPoint
 {
   CArray< REAL, NDIM > x;
   REAL weight;
+};
+
+/**
+ * 
+ */
+template< typename REAL >
+struct QuadratureGrid
+{
+  QuadratureGrid( int const ndim, int const npoints ):
+    points( ndim, npoints ),
+    weights( npoints )
+  {}
+
+  Array2d< REAL > points;
+  Array1d< REAL > weights;
 };
 
 /**
@@ -55,7 +73,7 @@ auto integrate(
  * 
  */
 template< typename INTEGRATOR, typename CHANGE_OF_VARIABLES >
-Array2d< typename INTEGRATOR::Real > createGrid(
+QuadratureGrid< typename INTEGRATOR::Real > createGrid(
   INTEGRATOR const & integrator,
   CHANGE_OF_VARIABLES const & changeOfVariables )
 {
@@ -64,9 +82,9 @@ Array2d< typename INTEGRATOR::Real > createGrid(
 
   static_assert( std::is_same_v< Real, typename CHANGE_OF_VARIABLES::Real > );
 
-  Array2d< Real > grid( NDIM + 1, integrator.numPoints() );
+  QuadratureGrid< Real > grid( NDIM, integrator.numPoints() );
 
-  for( IndexType i = 0; i < grid.size( 1 ); ++i )
+  for( IndexType i = 0; i < integrator.numPoints(); ++i )
   {
     GridPoint< Real, NDIM > const gridPoint = integrator.gridPoint( i );
 
@@ -74,10 +92,10 @@ Array2d< typename INTEGRATOR::Real > createGrid(
 
     for( int dim = 0; dim < NDIM; ++dim )
     {
-      grid( dim, i ) = u[ dim ];
+      grid.points( dim, i ) = u[ dim ];
     }
 
-    grid( NDIM, i ) = gridPoint.weight * changeOfVariables.jacobian( gridPoint.x ) * integrator.gridWeight();
+    grid.weights( i ) = gridPoint.weight * changeOfVariables.jacobian( gridPoint.x ) * integrator.gridWeight();
   }
 
   return grid;
@@ -87,7 +105,7 @@ Array2d< typename INTEGRATOR::Real > createGrid(
  * 
  */
 template< typename INTEGRATOR >
-Array2d< typename INTEGRATOR::Real > createGrid(
+QuadratureGrid< typename INTEGRATOR::Real > createGrid(
   INTEGRATOR const & integrator )
 {
   return createGrid( integrator, changeOfVariables::None< typename INTEGRATOR::Real, INTEGRATOR::NDIM > {} );
@@ -97,21 +115,23 @@ Array2d< typename INTEGRATOR::Real > createGrid(
  * 
  */
 template< int NDIM, typename REAL, typename F >
-auto integrate( ArrayView2d< REAL const > const & grid, F && f ) -> decltype( f( CArray< REAL, NDIM > {} ) * REAL {} )
+auto integrate(
+  QuadratureGrid< REAL > const & grid,
+  F && f ) -> decltype( f( CArray< REAL, NDIM > {} ) * REAL {} )
 {
-  LVARRAY_ERROR_IF_NE( grid.size( 0 ), NDIM + 1 );
+  LVARRAY_ERROR_IF_NE( grid.points.size( 0 ), NDIM );
   
   decltype( f( CArray< REAL, NDIM > {} ) * REAL {} ) answer = 0;
-  for( IndexType i = 0; i < grid.size( 1 ); ++i )
+  for( IndexType i = 0; i < grid.points.size( 1 ); ++i )
   {
     CArray< REAL, NDIM > x;
 
     for( int dim = 0; dim < NDIM; ++dim )
     {
-      x[ dim ] = grid( dim, i );
+      x[ dim ] = grid.points( dim, i );
     }
 
-    REAL const weight = grid( NDIM, i );
+    REAL const weight = grid.weights( i );
     answer += f( x ) * weight;
   }
 

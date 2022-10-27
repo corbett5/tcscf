@@ -49,10 +49,10 @@ Array4d< std::complex< double > > computeLOppositeSpin(
   std::vector< OchiBasisFunction< double > > const & basisFunctions,
   jastrowFunctions::Ochi< double > const & u )
 {
-  return integration::integrateAll< double >( r1GridSize, r2GridSize, basisFunctions,
-    [&u] ( double const r1, Cartesian< double > const & r1C, double const r12, Cartesian< double > const & r12C, double const r2 )
+  return integration::integrateAllR1R2< false, double >( r1GridSize, r2GridSize, basisFunctions,
+    [&u] ( Cartesian< double > const & r1, Cartesian< double > const & r2 )
     {
-      return u.laplacian( r1, r1C, r12, r12C, r2, false );
+      return u.laplacian( r1, r2, false );
     }
   );
 }
@@ -66,11 +66,28 @@ Array4d< std::complex< double > > computeGOppositeSpin(
   std::vector< OchiBasisFunction< double > > const & basisFunctions,
   jastrowFunctions::Ochi< double > const & u )
 {
-  return integration::integrateAll< double >( r1GridSize, r2GridSize, basisFunctions,
-    [&u] ( double const r1, Cartesian< double > const & r1C, double const r12, Cartesian< double > const & r12C, double const r2 )
+  return integration::integrateAllR1R2< false, double >( r1GridSize, r2GridSize, basisFunctions,
+    [&u] ( Cartesian< double > const & r1, Cartesian< double > const & r2 )
     {
-      Cartesian< double > const grad1 = u.gradient( r1, r1C, r12, r12C, r2, false );
+      Cartesian< double > const grad1 = u.gradient( r1, r2, false );
       return dot( grad1, grad1 );
+    }
+  );
+}
+
+/**
+ * 
+ */
+Array4d< std::complex< double > > computeDOppositeSpin(
+  int const r1GridSize,
+  int const r2GridSize,
+  std::vector< OchiBasisFunction< double > > const & basisFunctions,
+  jastrowFunctions::Ochi< double > const & u )
+{
+  return integration::integrateAllR1R2< true, double >( r1GridSize, r2GridSize, basisFunctions,
+    [&u] ( Cartesian< double > const & r1, Cartesian< double > const & r2 )
+    {
+      return u.gradient( r2, r1, false );
     }
   );
 }
@@ -83,7 +100,8 @@ void computeH2Prime(
   ArrayView4d< std::complex< double > > const & h2PrimeSame,
   ArrayView4d< std::complex< double > const > const & R,
   ArrayView4d< std::complex< double > const > const & LOppo,
-  ArrayView4d< std::complex< double > const > const & GOppo )
+  ArrayView4d< std::complex< double > const > const & GOppo,
+  ArrayView4d< std::complex< double > const > const & DPOppo )
 {
   int const nBasis = h2PrimeOppo.size( 0 );
   for( int dim = 0; dim < 4; ++dim )
@@ -94,6 +112,14 @@ void computeH2Prime(
     LVARRAY_ERROR_IF_NE( LOppo.size( dim ), nBasis );
     LVARRAY_ERROR_IF_NE( GOppo.size( dim ), nBasis );
   }
+
+  std::complex< double > LFromD = - conj( DPOppo( 0, 0, 0, 0 ) ) - DPOppo( 0, 0, 0, 0 );
+  LVARRAY_LOG( "LFromD = " << LFromD << ", L( 0, 0, 0, 0 ) = " << LOppo( 0, 0, 0, 0 ) );
+  
+  LFromD = - conj( DPOppo( 1, 0, 1, 0 ) ) - DPOppo( 1, 0, 1, 0 );
+  LVARRAY_LOG( "LFromD = " << LFromD << ", L( 0, 1, 0, 1 ) = " << LOppo( 0, 1, 0, 1 ) );
+  
+  abort();
 
   for( int j = 0; j < nBasis; ++j )
   {
@@ -141,7 +167,7 @@ void ochiHF(
   LVARRAY_LOG( "nMax = " << nMax << ", lMax = " << lMax << ", nBasis = " << nBasis <<
                ", r1 grid size = " << r1GridSize << ", r2 grid size = " << r2GridSize << ", alpha = " << alpha );
 
-  Array2d< double > const coreGrid = integration::createGrid(
+  integration::QuadratureGrid< double > const coreGrid = integration::createGrid(
     integration::ChebyshevGauss< double >( 1000 ),
     integration::changeOfVariables::TreutlerAhlrichsM4< double >( 1, 0.9 ) );
 
@@ -155,20 +181,14 @@ void ochiHF(
     Array2d< double > const coreMatrix( nBasis, nBasis );
     fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
     
-    Array4d< std::complex< double > > R = integration::integrateAll< double >( r1GridSize, r2GridSize, basisFunctions,
-      [] ( double const r1, Cartesian< double > const & r1C, double const r12, Cartesian< double > const & r12C, double const r2 )
+    Array4d< std::complex< double > > R = integration::integrateAllR1R2< false, double >( r1GridSize, r2GridSize, basisFunctions,
+      [] ( Cartesian< double > const & r1, Cartesian< double > const & r2 )
       {
-        LVARRAY_UNUSED_VARIABLE( r1 );
-        LVARRAY_UNUSED_VARIABLE( r1C );
-        LVARRAY_UNUSED_VARIABLE( r12C );
-        LVARRAY_UNUSED_VARIABLE( r2 );
+        double const r12 = (r1 - r2).r();
         return 1 / r12;
       }
     );
-
-    // Array4d< std::complex< double > > R( nBasis, nBasis, nBasis, nBasis );
-    // fillAtomicR12Array( basisFunctions, R );
-
+  
     std::cout << std::setprecision( 10 );
 
     double energy = 0;
@@ -187,11 +207,12 @@ void ochiHF(
 
       Array4d< std::complex< double > > const LOppo = computeLOppositeSpin( r1GridSize, r2GridSize, basisFunctions, u );
       Array4d< std::complex< double > > const GOppo = computeGOppositeSpin( r1GridSize, r2GridSize, basisFunctions, u );
+      Array4d< std::complex< double > > const DOppo = computeDOppositeSpin( r1GridSize, r2GridSize, basisFunctions, u );
 
       Array4d< std::complex< double > > const h2PrimeOppo( nBasis, nBasis, nBasis, nBasis );
       Array4d< std::complex< double > > const h2PrimeSame( nBasis, nBasis, nBasis, nBasis );
 
-      computeH2Prime( h2PrimeOppo, h2PrimeSame, R, LOppo, GOppo );
+      computeH2Prime( h2PrimeOppo, h2PrimeSame, R, LOppo, GOppo, DOppo );
 
       energy = hfCalculator.compute( true, {}, coreMatrix, h2PrimeSame, h2PrimeOppo );
     }

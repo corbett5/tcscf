@@ -8,14 +8,15 @@ namespace tcscf::jastrowFunctions
 template< typename REAL >
 struct Ochi
 {
+  using Real = REAL;
 
-  REAL operator()( REAL const r1, REAL const r2, REAL const r12, bool const sameSpin ) const
+  Real operator()( Real const r1, Real const r2, Real const r12, bool const sameSpin ) const
   {
-    REAL const r12T = r12 / (r12 + a);
-    REAL const r1T = r1 / (r1 + a);
-    REAL const r2T = r2 / (r2 + a);
+    Real const r12T = r12 / (r12 + a);
+    Real const r1T = r1 / (r1 + a);
+    Real const r2T = r2 / (r2 + a);
   
-    REAL const result = 0;
+    Real const result = 0;
     for( int idx = 0; idx < S.size( 0 ); ++idx )
     {
       int const i = S( idx, 0 );
@@ -29,29 +30,37 @@ struct Ochi
     return result;
   }
 
-  REAL laplacian( double const r1,
-    Cartesian< double > const & r1C,
-    double const r12,
-    Cartesian< double > const & r12C,
-    double const r2,
+  Real laplacian(
+    Cartesian< Real > const & r1C,
+    Cartesian< Real > const & r2C,
     bool const sameSpin ) const
   {
-    REAL const r1T = r1 / (r1 + a);
-    REAL const r12T = r12 / (r12 + a);
-    REAL const r2T = r2 / (r2 + a);
+    Cartesian< Real > const r12C = r1C - r2C;
+
+    Real const r1 = r1C.r();
+    Real const r2 = r1C.r();
+    Real const r12 = r12C.r();
+
+    Real const r1T = r1 / (r1 + a);
+    Real const r12T = r12 / (r12 + a);
+    Real const r2T = r2 / (r2 + a);
+
+    Real const r1Scale = std::pow( a / (r1 * (r1 + a)), 2 );
+    Real const r12Scale = std::pow( a12 / (r12 * (r12 + a12)), 2 );
+    Real const r1DotR12Scale = 2 * dot( r1C, r12C ) * a12 * a / (std::pow( r1 * r12, 2 ) * (r1 + a) * (r12 + a12));
   
-    REAL result = 0;
+    Real result = 0;
     for( int idx = 0; idx < S.size( 0 ); ++idx )
     {
       int const i = S( idx, 0 );
       int const j = S( idx, 1 );
       int const k = S( idx, 2 );
-      REAL const cIJK = c( idx, sameSpin );
+      Real const cIJK = c( idx, sameSpin );
 
-      REAL const factor = cIJK * std::pow( r12T, i ) * std::pow( r1T, j ) * std::pow( r2T, k );
-      REAL const r12Factor = (i + 1) * i * std::pow( a12 / (r12 * (r12 + a12)), 2 );
-      REAL const r1Factor = (j + 1) * j * std::pow( a / (r1 * (r1 + a)), 2 );
-      REAL const dotFactor = 2 * dot( r12C, r1C ) * i * j * a12 * a / (std::pow( r1 * r12, 2 ) * (r1 + a) * (r12 + a12));
+      Real const factor = cIJK * std::pow( r12T, i ) * std::pow( r1T, j ) * std::pow( r2T, k );
+      Real const r1Factor = (j + 1) * j * r1Scale;
+      Real const r12Factor = (i + 1) * i * r12Scale;
+      Real const dotFactor = i * j * r1DotR12Scale;
 
       result = result + factor * (r1Factor + r12Factor + dotFactor);
     }
@@ -59,41 +68,48 @@ struct Ochi
     return result;
   }
 
-  Cartesian< REAL > gradient(
-    double const r1,
-    Cartesian< double > const & r1C,
-    double const r12,
-    Cartesian< double > const & r12C,
-    double const r2,
+  Cartesian< Real > gradient(
+    Cartesian< Real > const & r1C,
+    Cartesian< Real > const & r2C,
     bool const sameSpin ) const
   {
-    REAL const r1T = r1 / (r1 + a);
-    REAL const r12T = r12 / (r12 + a);
-    REAL const r2T = r2 / (r2 + a);
+    Cartesian< Real > const r12C = r1C - r2C;
+
+    Real const r1 = r1C.r();
+    Real const r2 = r1C.r();
+    Real const r12 = r12C.r();
+
+    Real const r1T = r1 / (r1 + a);
+    Real const r12T = r12 / (r12 + a);
+    Real const r2T = r2 / (r2 + a);
+
+    Real const r1Scale = a / (std::pow( r1, 2 ) * (r1 + a));
+    Real const r2Scale = a12 / (std::pow( r12, 2 ) * (r12 + a12));
   
-    Cartesian< REAL > result {};
+    Real r1Length = 0;
+    Real r12Length = 0;
     for( int idx = 0; idx < S.size( 0 ); ++idx )
     {
       int const i = S( idx, 0 );
       int const j = S( idx, 1 );
       int const k = S( idx, 2 );
-      REAL const cIJK = c( idx, sameSpin );
+      Real const cIJK = c( idx, sameSpin );
 
-      REAL const factor = cIJK * std::pow( r12T, i ) * std::pow( r1T, j ) * std::pow( r2T, k );
-      REAL const r12Scaling = factor * i * a12 / (std::pow( r12, 2 ) * (r12 + a12));
-      result.scaledAdd( r12Scaling, r12C );
-
-      REAL const r1Scaling  = factor * j * a / (std::pow( r1, 2 ) * (r1 + a));
-      result.scaledAdd( r1Scaling, r1C );
+      Real const factor = cIJK * std::pow( r12T, i ) * std::pow( r1T, j ) * std::pow( r2T, k );
+      r1Length += factor * j * r1Scale;
+      r12Length += factor * i * r2Scale;
     }
 
-    return result;
+    return {
+      r12Length * r12C.x() + r1Length * r1C.x(),
+      r12Length * r12C.y() + r1Length * r1C.y(),
+      r12Length * r12C.y() + r1Length * r1C.y() };
   }
 
 
-  REAL const a;
-  REAL const a12;
-  Array2d< REAL > const c;
+  Real const a;
+  Real const a12;
+  Array2d< Real > const c;
   Array2d< int > const S;
 };
 

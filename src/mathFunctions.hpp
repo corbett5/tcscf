@@ -171,7 +171,7 @@ struct Cartesian;
 template< typename REAL >
 struct Spherical
 {
-  constexpr operator Cartesian< REAL >() const
+  constexpr Cartesian< REAL > toCartesian() const
   {
     REAL sinPhi, cosPhi;
     LvArray::math::sincos( _phi, sinPhi, cosPhi );
@@ -250,8 +250,8 @@ struct Cartesian
 };
 
 
-template< typename V1, typename V2 >
-auto dot( V1 & v1, V2 const & v2 )
+template< typename T, typename U >
+auto dot( Cartesian< T > const & v1, Cartesian< U > const & v2 )
 {
   return v1.x() * v2.x() + v1.y() * v2.y() + v1.z() * v2.z();
 }

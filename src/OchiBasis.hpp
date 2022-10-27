@@ -37,8 +37,8 @@ struct OchiBasisFunction
   /**
    * 
    */
-  Complex operator()( Real const r, Real const theta, Real const phi ) const
-  { return radialComponent( r ) * sphericalHarmonic( l, m, theta, phi ); }
+  Complex operator()( Spherical< Real > const & r ) const
+  { return radialComponent( r.r() ) * sphericalHarmonic( l, m, r.theta(), r.phi() ); }
 
   /**
    * 
@@ -55,21 +55,50 @@ struct OchiBasisFunction
   /**
    * 
    */
-  Spherical< Real > gradient( Spherical< Real > const & r )
+  Cartesian< Complex > gradient( Spherical< Real > const & r ) const
   {
     Real const radial = radialComponent( r.r() );
-    Real const Ylm = sphericalHarmonic( l, m, r.theta(), r.phi() );
+    Complex const Ylm = sphericalHarmonic( l, m, r.theta(), r.phi() );
 
     Real const dLaguerrePart = (n > 0) *
-      -2 * alpha * normalization * std::pow( r, l ) * std::exp( -alpha * r.r() ) * assocLaguerre( n - 1, 2 * l + 3, 2 * alpha * r.r() );
+      -2 * alpha * normalization * std::pow( r.r(), l ) * std::exp( -alpha * r.r() ) * assocLaguerre( n - 1, 2 * l + 3, 2 * alpha * r.r() );
 
-    Real const Ylmp1 = (l != m) * std::sqrt((l - m) * (l + m + 1)) * cExp( -r.phi() ) * sphericalHarmonic( l, m + 1, r.theta(), r.phi() );
+    Complex const Ylmp1 = (l != m) * std::sqrt((l - m) * (l + m + 1)) * cExp( -r.phi() ) * sphericalHarmonic( l, m + 1, r.theta(), r.phi() );
     
-    Real const rHat = ((l / r.r() - alpha) * radial + dLaguerrePart) * Ylm;
-    Real const thetaHat = (m * Ylm / std::tan( r.theta() ) + Ylmp1) * radial / r.r();
-    Real const phiHat = I< Real > * m * Ylm * radial / (r.r() * std::sin( r.theta() ));
+    Complex const rHat = ((l / r.r() - alpha) * radial + dLaguerrePart) * Ylm;
+    Complex const thetaHat = (m * Ylm / std::tan( r.theta() ) + Ylmp1) * radial / r.r();
+    Complex const phiHat = I< Real > * m * Ylm * radial / (r.r() * std::sin( r.theta() ));
 
-    return { rHat, thetaHat, phiHat };
+    Cartesian< Complex > answer {};
+    
+    Cartesian< Real > rHatC
+      { std::cos( r.phi() ) * std::sin( r.theta() ),
+        std::sin( r.phi() ) * std::sin( r.theta() ),
+        std::cos( r.theta() ) };
+
+    answer._x += rHat * rHatC.x();
+    answer._y += rHat * rHatC.y();
+    answer._z += rHat * rHatC.z();
+
+    Cartesian< Real > thetaHatC
+    { std::cos( r.phi() ) * std::cos( r.theta() ),
+      std::sin( r.phi() ) * std::cos( r.theta() ),
+      -std::sin( r.theta() ) };
+
+    answer._x += thetaHat * thetaHatC.x();
+    answer._y += thetaHat * thetaHatC.y();
+    answer._z += thetaHat * thetaHatC.z();
+
+    Cartesian< Real > phiHatC
+    { -std::sin( r.phi() ),
+      std::cos( r.phi() ),
+      0 };
+
+    answer._x += phiHat * phiHatC.x();
+    answer._y += phiHat * phiHatC.y();
+    answer._z += phiHat * phiHatC.z();
+
+    return answer;
   }
 
   Real const alpha;
@@ -88,7 +117,7 @@ struct OchiBasisFunction
  */
 template< typename REAL >
 REAL coreMatrixElement(
-  ArrayView2d< REAL const > const & quadratureGrid,
+  integration::QuadratureGrid< REAL > const & quadratureGrid,
   int const Z,
   OchiBasisFunction< REAL > const & b1,
   OchiBasisFunction< REAL > const & b2 )

@@ -157,7 +157,7 @@ struct AtomicParams
  */
 template< typename BASIS, typename T >
 void fillCoreMatrix(
-  ArrayView2d< typename BASIS::Real const > const & quadratureGrid,
+  integration::QuadratureGrid< T > const & quadratureGrid,
   int const Z,
   std::vector< BASIS > const & basisFunctions,
   ArrayView2d< T > const & matrix )

@@ -23,6 +23,8 @@ struct QMCGrid
     std::vector< ATOMIC_BASIS > const & basisFunctions,
     bool const storeGradients )
   {
+    TCSCF_MARK_SCOPE( "QMCGrid::QMCGrid" );
+
     static_assert( std::is_same_v< REAL, typename ATOMIC_BASIS::Real > );
 
     constexpr changeOfVariables::TreutlerAhlrichsM4< REAL > rChange( 0, 0.9 );
@@ -178,6 +180,8 @@ Array4d< std::complex< REAL > > integrateAllR1R2(
   ArrayView1d< Real const > const r2Weights = r2Grid.quadratureGrid.weights.toViewConst();
   ArrayView2d< Real const > const r2BasisValues = r2Grid.basisValues.toViewConst();
   ArrayView2d< Cartesian< Complex > const > const r2BasisGradients = r2Grid.basisGradients.toViewConst();
+
+  TCSCF_MARK_SCOPE( "integrate" );
 
   forAll< DefaultPolicy< PolicyType > >( r1Grid.quadratureGrid.points.size( 1 ),
     [=, answer=answer.toView()] ( IndexType const idx )

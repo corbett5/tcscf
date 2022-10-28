@@ -209,6 +209,11 @@ struct Spherical
 template< typename REAL >
 struct Cartesian
 {
+  constexpr Spherical< REAL > toSpherical() const
+  {
+    return { r(), theta(), phi() };    
+  }
+
   constexpr REAL x() const
   { return _x; }
 

@@ -16,7 +16,8 @@ set( portedKernel_test_sources
      AtomicBasisTest.cpp
      HartreeFockTest.cpp
      IntegrationTest.cpp
-     gradientsTest.cpp )
+     gradientsTest.cpp
+     orthogonalizationTest.cpp )
 
 set( portedKernelTests "" )
 foreach( test ${portedKernel_test_sources} )

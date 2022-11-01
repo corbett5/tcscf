@@ -2,6 +2,7 @@
 
 #include "caliperInterface.hpp"
 
+#include "orthogonalization.hpp"
 #include "dense/eigenDecomposition.hpp"
 
 namespace tcscf
@@ -10,13 +11,16 @@ namespace tcscf
 namespace internal
 {
 
-// TODO: make these member functions
+/**
+ * TODO: replace with PossibleAliases
+ */
 template< typename T, typename U >
 void constructFockOperator(
-  ArrayView2d< T, 0 > const & fockOperator,
+  ArraySlice2d< T, 0 > const & fockOperator,
   ArrayView2d< U const > const & oneElectronTerms,
   ArrayView4d< T const > const & twoElectronTerms,
-  ArrayView2d< T const > const & density )
+  ArraySlice2d< T const > const & densitySameSpin,
+  ArraySlice2d< T const > const & densityOppoSpin )
 {
   TCSCF_MARK_FUNCTION;
 
@@ -30,7 +34,8 @@ void constructFockOperator(
       {
         for( IndexType b = 0; b < basisSize; ++b)
         {
-          tmp += density( a, b ) * (twoElectronTerms( u, b, v, a ) - twoElectronTerms( u, b, a, v ) / 2);
+          tmp += (densitySameSpin( a, b ) + densityOppoSpin( a, b )) * twoElectronTerms( u, b, v, a ) -
+                 densitySameSpin( a, b ) * twoElectronTerms( u, b, a, v );
         }
       }
 
@@ -45,12 +50,11 @@ void constructFockOperator(
 template< typename T >
 void getNewDensity(
   IndexType const nElectrons,
-  ArrayView2d< T > const & density,
-  ArrayView2d< T const, 0 > const & eigenvectors )
+  ArraySlice2d< T > const & density,
+  ArraySlice2d< T const, 0 > const & eigenvectors )
 {
   TCSCF_MARK_FUNCTION;
 
-  LVARRAY_ERROR_IF_NE( nElectrons % 2, 0 );
   IndexType const basisSize = eigenvectors.size( 0 );
   
   // TODO: replace with with matrix multiplication C C^\dagger
@@ -59,35 +63,38 @@ void getNewDensity(
     for( IndexType v = 0; v < basisSize; ++v )
     {
       T tmp = 0;
-      for( IndexType a = 0; a < nElectrons / 2; ++a )
+      for( IndexType a = 0; a < nElectrons; ++a )
       {
         tmp += eigenvectors( u, a ) * conj( eigenvectors( v, a ) );
       }
 
-      density( u, v ) = 2 * tmp;
+      density( u, v ) = tmp;
     }
   }
 }
 
 /**
- * 
+ * TODO: replace with PossibleAliases
  */
 template< typename T, typename U >
-T calculateEnergy(
-  ArrayView2d< T const, 0 > const & fockOperator,
-  ArrayView2d< U const > const & oneElectronTerms,
-  ArrayView2d< T const > const & density )
+T calculateEnergy( 
+  ArraySlice2d< T const, 0 > const & fockOperatorSpinUp,
+  ArraySlice2d< T const, 0 > const & fockOperatorSpinDown,
+  ArraySlice2d< T const > const & densitySpinUp,
+  ArraySlice2d< T const > const & densitySpinDown,
+  ArraySlice2d< U const > const & oneElectronTerms )
 {
   TCSCF_MARK_FUNCTION;
 
-  IndexType const basisSize = oneElectronTerms.size( 0 );
-  
+  IndexType const basisSize = fockOperatorSpinUp.size( 0 );
+
   T energy = 0;
   for( int u = 0; u < basisSize; ++u )
   {
     for( int v = 0; v < basisSize; ++v )
     {
-      energy += density( v, u ) * (oneElectronTerms( u, v ) + fockOperator( u, v ));
+      energy += densitySpinUp( v, u ) * (oneElectronTerms( u, v ) + fockOperatorSpinUp( u, v )) +
+                densitySpinDown( v, u ) * (oneElectronTerms( u, v ) + fockOperatorSpinDown( u, v ));
     }
   }
 
@@ -129,15 +136,18 @@ RealType< T > RCSHartreeFock< T >::compute(
   for( int iter = 0; iter < 1000; ++iter )
   {
     internal::constructFockOperator(
-      fockOperator.toView(),
+      fockOperator.toSlice(),
       oneElectronTerms,
       twoElectronTerms,
-      density.toViewConst() );
+      density.toSliceConst(),
+      density.toSliceConst() );
 
     Real const newEnergy = internal::calculateEnergy(
-      fockOperator.toViewConst(),
-      oneElectronTerms,
-      density.toViewConst() ).real();
+      fockOperator.toSliceConst(),
+      fockOperator.toSliceConst(),
+      density.toSliceConst(),
+      density.toSliceConst(),
+      oneElectronTerms.toSliceConst() ).real();
 
     if( std::abs( (newEnergy - energy) / energy ) < 10 * std::numeric_limits< Real >::epsilon() )
     {
@@ -163,7 +173,7 @@ RealType< T > RCSHartreeFock< T >::compute(
       LVARRAY_ERROR( "Generalized eigenvalue problem not yet supported." );
     }
 
-    internal::getNewDensity( nElectrons, density, eigenvectors.toViewConst() );
+    internal::getNewDensity( nElectrons / 2, density.toSlice(), eigenvectors.toSliceConst() );
   }
 
   LVARRAY_ERROR( "Did not converge :(" );
@@ -208,9 +218,22 @@ RealType< T > UOSHartreeFock< T >::compute(
 
   for( int iter = 0; iter < 1000; ++iter )
   {
-    constructFockOperator( oneElectronTerms, twoElectronTerms );
+    for( int spin = 0; spin < 2; ++spin )
+    {
+      internal::constructFockOperator(
+        fockOperator[ spin ],
+        oneElectronTerms,
+        twoElectronTerms,
+        density[ spin ].toSliceConst(),
+        density[ !spin ].toSliceConst() );
+    }
 
-    Real const newEnergy = calculateEnergy( oneElectronTerms ).real();
+    Real const newEnergy = internal::calculateEnergy(
+      fockOperator[ 0 ].toSliceConst(),
+      fockOperator[ 1 ].toSliceConst(),
+      density[ 0 ].toSliceConst(),
+      density[ 1 ].toSliceConst(),
+      oneElectronTerms.toSliceConst() ).real();
 
     if( std::abs( (newEnergy - energy) / energy ) < 10 * std::numeric_limits< Real >::epsilon() )
     {
@@ -239,87 +262,13 @@ RealType< T > UOSHartreeFock< T >::compute(
       LVARRAY_ERROR( "Generalized eigenvalue problem not yet supported." );
     }
 
-    getNewDensity();
+    internal::getNewDensity( nElectrons[ 0 ], density[ 0 ], eigenvectors[ 0 ].toSliceConst() );
+    internal::getNewDensity( nElectrons[ 1 ], density[ 1 ], eigenvectors[ 1 ].toSliceConst() );
   }
 
   LVARRAY_ERROR( "Did not converge :(" );
   return std::numeric_limits< Real >::max();
 }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-template< typename T >
-void UOSHartreeFock< T >::constructFockOperator(
-  ArrayView2d< Real const > const & oneElectronTerms,
-  ArrayView4d< T const > const & twoElectronTerms )
-{
-  TCSCF_MARK_FUNCTION;
-
-  for( int spin = 0; spin < 2; ++spin )
-  {
-    for( IndexType u = 0; u < basisSize; ++u )
-    {
-      for( IndexType v = 0; v < basisSize; ++v )
-      {
-        T tmp = 0;
-        for( IndexType a = 0; a < basisSize; ++a )
-        {
-          for( IndexType b = 0; b < basisSize; ++b)
-          {
-            tmp += (density( 0, a, b ) + density( 1, a, b )) * twoElectronTerms( u, b, v, a ) - density( spin, a, b ) * twoElectronTerms( u, b, a, v );
-          }
-        }
-
-        fockOperator( spin, u, v ) = oneElectronTerms( u, v ) + tmp;
-      }
-    }
-  }
-}
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-template< typename T >
-T UOSHartreeFock< T >::calculateEnergy( ArrayView2d< Real const > const & oneElectronTerms ) const
-{
-  TCSCF_MARK_FUNCTION;
-
-  T energy = 0;
-  for( int u = 0; u < basisSize; ++u )
-  {
-    for( int v = 0; v < basisSize; ++v )
-    {
-      energy += density( 0, v, u ) * (oneElectronTerms( u, v ) + fockOperator( 0, u, v )) +
-                density( 1, v, u ) * (oneElectronTerms( u, v ) + fockOperator( 1, u, v ));
-    }
-  }
-
-  return energy / 2;
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-template< typename T >
-void UOSHartreeFock< T >::getNewDensity()
-{
-  TCSCF_MARK_FUNCTION;
-
-  for( int spin = 0; spin < 2; ++spin )
-  {
-    // TODO: replace with with matrix multiplication C C^\dagger
-    for( IndexType u = 0; u < basisSize; ++u )
-    {
-      for( IndexType v = 0; v < basisSize; ++v )
-      {
-        T tmp = 0;
-        for( IndexType a = 0; a < nElectrons[ spin ]; ++a )
-        {
-          tmp += eigenvectors( spin, u, a ) * conj( eigenvectors( spin, v, a ) );
-        }
-
-        density( spin, u, v ) = tmp;
-      }
-    }
-  }
-}
-
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 template< typename T >
@@ -350,18 +299,18 @@ RealType< T > TCHartreeFock< T >::compute(
     LVARRAY_ERROR_IF_NE( overlap.size( 1 ), basisSize );
   }
 
-  CArray< LvArray::dense::EigenDecompositionOptions, 2 > const eigenDecompositionOptions { {
-    { LvArray::dense::EigenDecompositionOptions::EIGENVALUES_AND_RIGHT_VECTORS,
-      1,
-      nElectrons[ 0 ] },
-    { LvArray::dense::EigenDecompositionOptions::EIGENVALUES_AND_RIGHT_VECTORS,
-      1,
-      nElectrons[ 1 ] }
-  } };
+  LvArray::dense::EigenDecompositionOptions const eigenDecompositionOptions(
+    LvArray::dense::EigenDecompositionOptions::EIGENVALUES_AND_RIGHT_VECTORS );
 
   Real energy = std::numeric_limits< Real >::max();
 
   // TODO: figure out a way to initialize the density in a non-zero manner.
+  Array2d< IndexType > sortedIndices( 2, basisSize );
+  for( int i = 0; i < basisSize; ++i )
+  {
+    sortedIndices( 0, i ) = i;
+    sortedIndices( 1, i ) = i;
+  }
 
   for( int iter = 0; iter < 1000; ++iter )
   {
@@ -380,15 +329,14 @@ RealType< T > TCHartreeFock< T >::compute(
     {
       for( int spin = 0; spin < 2; ++spin )
       {
-        LvArray::dense::heevr(
+        LvArray::dense::geev(
           LvArray::dense::BuiltInBackends::LAPACK,
-          eigenDecompositionOptions[ spin ],
+          eigenDecompositionOptions,
           fockOperator[ spin ],
           eigenvalues[ spin ],
           eigenvectors[ spin ],
-          _support.toSlice(),
-          _workspace,
-          LvArray::dense::SymmetricMatrixStorageType::UPPER_TRIANGULAR );
+          eigenvectors[ spin ],
+          _workspace );
       }
     }
     else
@@ -396,7 +344,30 @@ RealType< T > TCHartreeFock< T >::compute(
       LVARRAY_ERROR( "Generalized eigenvalue problem not yet supported." );
     }
 
-    getNewDensity();
+    for( int spin = 0; spin < 2; ++spin )
+    {
+      std::sort( sortedIndices[ spin ].begin(), sortedIndices[ spin ].end(),
+        [this, spin] ( int const a, int const b )
+        {
+          return std::real( eigenvalues( spin, a ) ) < std::real( eigenvalues( spin, b ) );
+        }
+      );
+
+      for( IndexType i = 0; i < nElectrons[ spin ]; ++i )
+      {
+        occupiedOrbitalPseudoEnergy[ spin ][ i ] = std::real( eigenvalues( spin, sortedIndices( spin, i ) ) );
+
+        for( IndexType j = 0; j < basisSize; ++j )
+        {
+          occupiedOrbitals[ spin ]( j, i ) = eigenvectors( spin, j, sortedIndices( spin, i ) );
+        }
+      }
+
+      // orthogonalization::modifiedGramSchmidt( occupiedOrbitals[ spin ] );
+    }
+
+    internal::getNewDensity( nElectrons[ 0 ], density[ 0 ], occupiedOrbitals[ 0 ].toSliceConst() );
+    internal::getNewDensity( nElectrons[ 1 ], density[ 1 ], occupiedOrbitals[ 1 ].toSliceConst() );
   }
 
   LVARRAY_ERROR( "Did not converge :(" );
@@ -481,7 +452,7 @@ T TCHartreeFock< T >::calculateEnergy(
         for( IndexType d = 0; d < basisSize; ++d )
         {
           T const totalDensity = density( 0, b, a ) * density( 1, d, c ) + density( 1, b, a ) * density( 0, d, c );
-          oppoSpinContrib += totalDensity * twoElectronTermsOppositeSpin(a, c, b, d);
+          oppoSpinContrib += totalDensity * twoElectronTermsOppositeSpin( a, c, b, d );
         }
       }
     }
@@ -490,151 +461,6 @@ T TCHartreeFock< T >::calculateEnergy(
 
   return energy / 3;
 }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-template< typename T >
-void TCHartreeFock< T >::getNewDensity()
-{
-  TCSCF_MARK_FUNCTION;
-
-  for( int spin = 0; spin < 2; ++spin )
-  {
-    // TODO: replace with with matrix multiplication C C^\dagger
-    for( IndexType u = 0; u < basisSize; ++u )
-    {
-      for( IndexType v = 0; v < basisSize; ++v )
-      {
-        T tmp = 0;
-        for( IndexType a = 0; a < nElectrons[ spin ]; ++a )
-        {
-          tmp += eigenvectors( spin, u, a ) * conj( eigenvectors( spin, v, a ) );
-        }
-
-        density( spin, u, v ) = tmp;
-      }
-    }
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////
-// template< typename T >
-// RealType< T > RCSNonHermitianHartreeFock< T >::compute(
-//   bool const orthogonal,
-//   ArrayView2d< T const > const & overlap,
-//   ArrayView2d< Real const > const & oneElectronTerms,
-//   ArrayView4d< T const > const & twoElectronTerms )
-// {
-//   TCSCF_MARK_FUNCTION;
-
-//   LVARRAY_ERROR_IF_NE( oneElectronTerms.size( 1 ), basisSize );
-
-//   LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 0 ), basisSize );
-//   LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 1 ), basisSize );
-//   LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 2 ), basisSize );
-//   LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 3 ), basisSize );
-
-//   LVARRAY_ERROR_IF_NE( density.size( 0 ), basisSize );
-//   LVARRAY_ERROR_IF_NE( density.size( 1 ), basisSize );
-
-//   if( !orthogonal )
-//   {
-//     LVARRAY_ERROR_IF_NE( overlap.size( 0 ), basisSize );
-//     LVARRAY_ERROR_IF_NE( overlap.size( 1 ), basisSize );
-//   }
-
-//   LvArray::dense::EigenDecompositionOptions eigenDecompositionOptions(
-//     LvArray::dense::EigenDecompositionOptions::EIGENVALUES_AND_RIGHT_VECTORS );
-
-//   Array1d< int > sortedIndices( basisSize );
-//   for( int i = 0; i < basisSize; ++i )
-//   {
-//     sortedIndices[ i ] = i;
-//   }
-
-//   Real energy = std::numeric_limits< Real >::max();
-
-//   for( int iter = 0; iter < 1000; ++iter )
-//   {
-//     internal::constructFockOperator(
-//       fockOperator.toView(),
-//       oneElectronTerms,
-//       twoElectronTerms,
-//       density.toViewConst() );
-
-//     // TODO: Need to calculate the pseudo energy here
-//     Real const newEnergy = internal::calculateEnergy(
-//       fockOperator.toViewConst(),
-//       oneElectronTerms,
-//       density.toViewConst() ).real();
-
-//     if( std::abs( (newEnergy - energy) / energy ) < 10 * std::numeric_limits< Real >::epsilon() )
-//     {
-//       return newEnergy;
-//     }
-
-//     energy = newEnergy;
-
-//     if( orthogonal )
-//     {
-//       LvArray::dense::geev(
-//         LvArray::dense::BuiltInBackends::LAPACK,
-//         eigenDecompositionOptions,
-//         fockOperator.toView(),
-//         eigenvalues.toView(),
-//         decltype( eigenvectors ) {},
-//         eigenvectors.toView(),
-//         _workspace );
-//     }
-//     else
-//     {
-//       LVARRAY_ERROR( "Generalized eigenvalue problem not yet supported." );
-//     }
-
-//     std::sort( sortedIndices.begin(), sortedIndices.end(),
-//       [this] ( int const a, int const b )
-//       {
-//         return std::real( eigenvalues[ a ] ) < std::real( eigenvalues[ b ] );
-//       }
-//     );
-
-//     // TODO: Then I need to orthonormalize the vectors using either QR or Gram-Schmidt.
-//     internal::getNewDensity( nElectrons, density, eigenvectors.toViewConst() );
-//   }
-
-//   LVARRAY_ERROR( "Did not converge :(" );
-//   return std::numeric_limits< Real >::max();
-// }
-
-
-// /**
-//  *
-//  */
-// template< typename T >
-// void getNewDensity(
-//   IndexType const nElectrons,
-//   ArrayView2d< T > const & density,
-//   ArrayView2d< T const, 0 > const & eigenvectors,
-//   ArrayView1d< int const > const & indices )
-// {
-//   TCSCF_MARK_FUNCTION;
-
-//   LVARRAY_ERROR_IF_NE( nElectrons % 2, 0 );
-//   IndexType const basisSize = eigenvectors.size( 0 );
-  
-//   for( IndexType u = 0; u < basisSize; ++u )
-//   {
-//     for( IndexType v = 0; v < basisSize; ++v )
-//     {
-//       T tmp = 0;
-//       for( IndexType a = 0; a < nElectrons / 2; ++a )
-//       {
-//         tmp += eigenvectors( u, indices[ a ] ) * conj( eigenvectors( v, indices[ a ] ) );
-//       }
-
-//       density( u, v ) = 2 * tmp;
-//     }
-//   }
-// }
 
 // Explicit instantiations.
 

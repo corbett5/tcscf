@@ -14,6 +14,7 @@ set( tcscf_headers
     OchiBasis.hpp
     RAJAInterface.hpp
     setup.hpp
+    orthogonalization.hpp
     
     integration/changeOfVariables.hpp
     integration/ChebyshevGauss.hpp

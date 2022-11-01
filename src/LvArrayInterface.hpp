@@ -31,8 +31,8 @@ template< typename T, int N, typename PERMUTATION >
 using Array = LvArray::Array< T, N, PERMUTATION, IndexType, LvArray::ChaiBuffer >;
 
 /// A one dimensional slice.
-template< typename T >
-using ArraySlice1d = ArraySlice< T, 1, 0 >;
+template< typename T, int USD=0 >
+using ArraySlice1d = ArraySlice< T, 1, USD >;
 
 /// A one dimensional view.
 template< typename T >
@@ -41,6 +41,10 @@ using ArrayView1d = ArrayView< T, 1, 0 >;
 /// A one dimensional array.
 template< typename T >
 using Array1d = Array< T, 1, RAJA::PERM_I >;
+
+/// A one dimensional slice.
+template< typename T, int USD=1 >
+using ArraySlice2d = ArraySlice< T, 2, USD >;
 
 /// A two dimensional view.
 template< typename T, int USD=1 >

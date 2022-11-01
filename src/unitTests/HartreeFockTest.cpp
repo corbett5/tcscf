@@ -290,7 +290,6 @@ void computeH2Prime(
   ArrayView4d< std::complex< double > > const & h2PrimeOppo,
   ArrayView4d< std::complex< double > > const & h2PrimeSame,
   ArrayView4d< std::complex< double > const > const & R,
-  ArrayView4d< std::complex< double > const > const & LOppo,
   ArrayView4d< std::complex< double > const > const & GOppo,
   ArrayView4d< std::complex< double > const > const & DPOppo )
 {
@@ -302,14 +301,8 @@ void computeH2Prime(
     LVARRAY_ERROR_IF_NE( h2PrimeOppo.size( dim ), nBasis );
     LVARRAY_ERROR_IF_NE( h2PrimeSame.size( dim ), nBasis );
     LVARRAY_ERROR_IF_NE( R.size( dim ), nBasis );
-    // LVARRAY_ERROR_IF_NE( LOppo.size( dim ), nBasis );
     LVARRAY_ERROR_IF_NE( GOppo.size( dim ), nBasis );
   }
-
-  LVARRAY_UNUSED_VARIABLE( LOppo );
-  LVARRAY_UNUSED_VARIABLE( GOppo );
-  LVARRAY_UNUSED_VARIABLE( DPOppo );
-  // compareLAndD( LOppo, DPOppo );
 
   for( int j = 0; j < nBasis; ++j )
   {
@@ -319,12 +312,18 @@ void computeH2Prime(
       {
         for( int m = 0; m < nBasis; ++m )
         {
-          std::complex< double > const h2_oppo_jl_im = R( j, ell, i, m ); //+ LOppo( j, ell, i, m ) - GOppo( j, ell, i, m );
-          std::complex< double > const h2_oppo_lj_mi = R( ell, j, m, i ); //+ LOppo( ell, j, m, i ) - GOppo( ell, j, m, i );
+          std::complex< double > const h2_oppo_jl_im =
+            R( j, ell, i, m ) - GOppo( j, ell, i, m ) + DPOppo( ell, j, m, i ) - conj( DPOppo( m, i, ell, j ) );
+          std::complex< double > const h2_oppo_lj_mi =
+            R( ell, j, m, i ) - GOppo( ell, j, m, i ) + DPOppo( j, ell, i, m ) - conj( DPOppo( i, m, j, ell ) );
+
           h2PrimeOppo( j, ell, i, m ) = h2_oppo_jl_im + h2_oppo_lj_mi;
 
-          std::complex< double > const h2_same_jl_im = R( j, ell, i, m ); //+ LOppo( j, ell, i, m ) / 2 - GOppo( j, ell, i, m ) / 4;
-          std::complex< double > const h2_same_lj_mi = R( ell, j, m, i ); //+ LOppo( ell, j, m, i ) / 2 - GOppo( ell, j, m, i ) / 4;
+          std::complex< double > const h2_same_jl_im =
+            R( j, ell, i, m ) - GOppo( j, ell, i, m ) / 4 + DPOppo( ell, j, m, i ) / 2 - conj( DPOppo( m, i, ell, j ) ) / 2;
+          std::complex< double > const h2_same_lj_mi =
+            R( ell, j, m, i ) - GOppo( ell, j, m, i ) / 4 + DPOppo( j, ell, i, m ) / 2 - conj( DPOppo( i, m, j, ell ) ) / 2;
+          
           h2PrimeSame( j, ell, i, m ) = h2_same_jl_im + h2_same_lj_mi;
         }
       }
@@ -367,7 +366,7 @@ void ochiHF(
 
   Array1d< double > energies;
 
-  int const nIter = 3;
+  int const nIter = 30;
   for( int iter = 0; iter < nIter; ++iter )
   {
     Array2d< double > const coreMatrix( nBasis, nBasis );
@@ -391,14 +390,14 @@ void ochiHF(
 
       jastrowFunctions::Ochi< double > const u { a, a12, c, S };
 
-      Array4d< std::complex< double > > const LOppo = computeLOppositeSpin( r1GridSize, r2GridSize, basisFunctions, u );
+      // Array4d< std::complex< double > > const LOppo = computeLOppositeSpin( r1GridSize, r2GridSize, basisFunctions, u );
       Array4d< std::complex< double > > const GOppo = computeGOppositeSpin( r1GridSize, r2GridSize, basisFunctions, u );
       Array4d< std::complex< double > > const DOppo = computeDOppositeSpin( r1GridSize, r2GridSize, basisFunctions, u );
 
       Array4d< std::complex< double > > const h2PrimeOppo( nBasis, nBasis, nBasis, nBasis );
       Array4d< std::complex< double > > const h2PrimeSame( nBasis, nBasis, nBasis, nBasis );
 
-      computeH2Prime( h2PrimeOppo, h2PrimeSame, R, LOppo, GOppo, DOppo );
+      computeH2Prime( h2PrimeOppo, h2PrimeSame, R, GOppo, DOppo );
 
       energy = hfCalculator.compute( true, {}, coreMatrix, h2PrimeSame, h2PrimeOppo );
     }
@@ -422,11 +421,9 @@ void ochiHF(
     createBasisFunctions( nMax, lMax, alpha, basisFunctions );
   }
 
-  std::cout << std::endl;
-
-  auto [mean, standardDev] = meanAndStd( energies.toViewConst() );
-  LVARRAY_LOG( "energy = " << mean << " +/- " << standardDev <<
-               " Ht, error = " << std::abs( HF_LIMIT - mean ) << " Ht, alpha = " << alpha );
+  auto const [mean, standardDev] = meanAndStd( energies.toViewConst() );
+  double const error = std::abs( HF_LIMIT - mean );
+  printf( "\renergy = %.6F +/- %.2e Ht, error = %.2e Ht, alpha = %.6F                     \n", mean, standardDev, error, alpha );
 }
 
 

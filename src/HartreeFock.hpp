@@ -51,13 +51,13 @@ struct RCSHartreeFock
 
   int const nElectrons;
   int const basisSize;
-  Array2d< std::complex< Real > > const density;
-  Array2d< std::complex< Real >, RAJA::PERM_JI > const fockOperator;
+  Array2d< T > const density;
+  Array2d< T, RAJA::PERM_JI > const fockOperator;
   Array1d< Real > const eigenvalues;
-  Array2d< std::complex< Real >, RAJA::PERM_JI > const eigenvectors;
+  Array2d< T, RAJA::PERM_JI > const eigenvectors;
 
 private:
-  LvArray::dense::ArrayWorkspace< std::complex< Real >, LvArray::ChaiBuffer > _workspace;
+  LvArray::dense::ArrayWorkspace< T, LvArray::ChaiBuffer > _workspace;
   Array1d< int > _support;
 };
 
@@ -97,28 +97,14 @@ struct UOSHartreeFock
 
   CArray< int, 2 > const nElectrons;
   int const basisSize;
-  Array3d< std::complex< Real > > const density;
-  Array3d< std::complex< Real >, RAJA::PERM_IKJ > const fockOperator;
+  Array3d< T > const density;
+  Array3d< T, RAJA::PERM_IKJ > const fockOperator;
   Array2d< Real > const eigenvalues;
-  Array3d< std::complex< Real >, RAJA::PERM_IKJ > const eigenvectors;
+  Array3d< T, RAJA::PERM_IKJ > const eigenvectors;
 
 private:
 
-  /**
-   */
-  void constructFockOperator(
-    ArrayView2d< Real const > const & oneElectronTerms,
-    ArrayView4d< T const > const & twoElectronTerms );
-  
-  /**
-   */
-  T calculateEnergy( ArrayView2d< Real const > const & oneElectronTerms ) const;
-
-  /**
-   */
-  void getNewDensity();
-
-  LvArray::dense::ArrayWorkspace< std::complex< Real >, LvArray::ChaiBuffer > _workspace;
+  LvArray::dense::ArrayWorkspace< T, LvArray::ChaiBuffer > _workspace;
   Array1d< int > _support;
 };
 
@@ -128,6 +114,7 @@ template< typename T >
 struct TCHartreeFock
 {
   using Real = RealType< T >;
+  using Complex = std::complex< Real >;
 
   /**
    */
@@ -136,9 +123,12 @@ struct TCHartreeFock
     basisSize{ numBasisFunctions },
     density( 2, numBasisFunctions, numBasisFunctions ),
     fockOperator( 2, numBasisFunctions, numBasisFunctions ),
+    occupiedOrbitalPseudoEnergy{ Array1d< Real >{ numSpinUp },
+                                 Array1d< Real >{ numSpinDown } },
+    occupiedOrbitals{ Array2d< Complex, RAJA::PERM_JI >{ basisSize, numSpinUp },
+                      Array2d< Complex, RAJA::PERM_JI >{ basisSize, numSpinDown } },
     eigenvalues( 2, numBasisFunctions ),
-    eigenvectors( 2, numBasisFunctions, numBasisFunctions ),
-    _support( 2 * std::max( numSpinUp, numSpinDown ) )
+    eigenvectors( 2, numBasisFunctions, numBasisFunctions )
   {}
   
   /**
@@ -153,16 +143,18 @@ struct TCHartreeFock
   /**
    */
   Real highestOccupiedOrbitalEnergy() const
-  { 
-    return std::max( eigenvalues( 0, nElectrons[ 0 ] - 1 ), eigenvalues( 1, nElectrons[ 1 ] - 1 ) );
+  {
+    return std::max( occupiedOrbitalPseudoEnergy[ 0 ][ nElectrons[ 0 ] - 1 ],
+                     occupiedOrbitalPseudoEnergy[ 1 ][ nElectrons[ 1 ] - 1 ] );
   }
 
   CArray< int, 2 > const nElectrons;
   int const basisSize;
-  Array3d< std::complex< Real > > const density;
-  Array3d< std::complex< Real >, RAJA::PERM_IKJ > const fockOperator;
-  Array2d< Real > const eigenvalues;
-  Array3d< std::complex< Real >, RAJA::PERM_IKJ > const eigenvectors;
+  Array3d< Complex > const density;
+  Array3d< Complex, RAJA::PERM_IKJ > const fockOperator;
+
+  CArray< Array1d< Real >, 2 > occupiedOrbitalPseudoEnergy;
+  CArray< Array2d< Complex, RAJA::PERM_JI >, 2 > occupiedOrbitals;
 
 private:
 
@@ -184,8 +176,9 @@ private:
    */
   void getNewDensity();
 
-  LvArray::dense::ArrayWorkspace< std::complex< Real >, LvArray::ChaiBuffer > _workspace;
-  Array1d< int > _support;
+  LvArray::dense::ArrayWorkspace< Complex, LvArray::ChaiBuffer > _workspace;
+  Array2d< Complex > const eigenvalues;
+  Array3d< Complex, RAJA::PERM_IKJ > const eigenvectors;
 };
 
 } // namespace tcscf

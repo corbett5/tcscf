@@ -363,6 +363,7 @@ RealType< T > TCHartreeFock< T >::compute(
         }
       }
 
+      // TODO: Pretty sure this isn't necessary when only considering a two electron system with spin up and spin down.
       // orthogonalization::modifiedGramSchmidt( occupiedOrbitals[ spin ] );
     }
 

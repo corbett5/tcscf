@@ -8,7 +8,6 @@ namespace tcscf::integration
 {
 
 /**
- * 
  */
 template< typename REAL, int NDIM >
 struct QMCGrid
@@ -17,6 +16,8 @@ struct QMCGrid
 
   using BASIS_VALUE_TYPE = std::conditional_t< NDIM == 3, std::complex< REAL >, REAL >;
 
+  /**
+   */
   template< typename ATOMIC_BASIS >
   QMCGrid(
     IndexType gridSize,
@@ -50,46 +51,62 @@ struct QMCGrid
       basisGradients.resize( quadratureGrid.weights.size(), nBasis );
     }
 
-    for( IndexType i = 0; i < quadratureGrid.weights.size(); ++i )
-    {
-      Spherical< REAL > const r {
-        quadratureGrid.points( 0, i ),
-        quadratureGrid.points( 1, i ),
-        NDIM == 3 ? quadratureGrid.points( 2, i ) : REAL {} };
-
-      if constexpr ( NDIM == 2 )
+    forAll< DefaultPolicy< ParallelHost > >( quadratureGrid.weights.size(),
+      [&] ( IndexType const i )
       {
-        quadratureGrid.points( 0, i ) = r.x();
-        quadratureGrid.points( 1, i ) = r.z();
-      }
-      else
-      {
-        quadratureGrid.points( 0, i ) = r.x();
-        quadratureGrid.points( 1, i ) = r.y();
-        quadratureGrid.points( 2, i ) = r.z();
-      }
+        Spherical< REAL > const r {
+          quadratureGrid.points( 0, i ),
+          quadratureGrid.points( 1, i ),
+          NDIM == 3 ? quadratureGrid.points( 2, i ) : REAL {} };
 
-      REAL const jacobian = std::pow( r.r(), 2 ) * std::sin( r.theta() );
-      quadratureGrid.weights( i ) *= jacobian;
-
-      for( int b = 0; b < nBasis; ++b )
-      {
         if constexpr ( NDIM == 2 )
         {
-          basisValues( i, b ) = std::real( basisFunctions[ b ]( r ) );
+          quadratureGrid.points( 0, i ) = r.x();
+          quadratureGrid.points( 1, i ) = r.z();
         }
         else
         {
-          basisValues( i, b ) = basisFunctions[ b ]( r );
+          quadratureGrid.points( 0, i ) = r.x();
+          quadratureGrid.points( 1, i ) = r.y();
+          quadratureGrid.points( 2, i ) = r.z();
         }
 
-        if( storeGradients )
+        REAL const jacobian = std::pow( r.r(), 2 ) * std::sin( r.theta() );
+        quadratureGrid.weights( i ) *= jacobian;
+
+        for( int b = 0; b < nBasis; ++b )
         {
-          basisGradients( i, b ) = basisFunctions[ b ].gradient( r );
+          if constexpr ( NDIM == 2 )
+          {
+            basisValues( i, b ) = std::real( basisFunctions[ b ]( r ) );
+          }
+          else
+          {
+            basisValues( i, b ) = basisFunctions[ b ]( r );
+          }
+
+          if( storeGradients )
+          {
+            basisGradients( i, b ) = basisFunctions[ b ].gradient( r );
+          }
         }
       }
-    }
+    );
   };
+
+  /**
+   */
+  IndexType nBasis() const
+  {
+    return basisValues.size( 1 );
+  }
+
+  /**
+   */
+  bool gradientsStored() const
+  {
+    return !basisGradients.empty();
+  }
 
 
   integration::QuadratureGrid< REAL > quadratureGrid{ 0, 0 };
@@ -100,75 +117,96 @@ struct QMCGrid
 /**
  *
  */
-template< typename REAL, typename F >
-REAL evaluateR2Integral(
-  ArrayView2d< REAL const > const & points,
-  ArrayView1d< REAL const > const & weights,
-  ArrayView2d< REAL const > const & basisValues,
-  Cartesian< REAL > const & r1,
-  IndexType const b2,
-  IndexType const b4,
-  F && f )
-{
-  using Real = REAL;
-
-  REAL answer = 0;
-  for( IndexType idx = 0; idx < weights.size(); ++idx )
-  {
-    Cartesian< Real > const r2 { points( 0, idx ), 0, points( 1, idx ) };
-    answer = answer + weights[ idx ] * basisValues( idx, b4 ) * f( r1, r2 ) * basisValues( idx, b2 );
-  }
-
-  return 2 * pi< Real > * answer;
-}
+static constexpr IndexType BATCH_SIZE = 16;
 
 /**
  *
  */
 template< typename REAL, typename F >
-std::complex< REAL > evaluateR2GradientIntegral(
+CArray< REAL, BATCH_SIZE > evaluateR2Integral(
+  ArrayView2d< REAL const > const & points,
+  ArrayView1d< REAL const > const & weights,
+  ArrayView2d< REAL const > const & basisValues,
+  Cartesian< REAL > const & r1,
+  IndexType const b2Min,
+  IndexType const batchSize,
+  IndexType const b4,
+  F && f )
+{
+  using Real = REAL;
+
+  CArray< Real, BATCH_SIZE > answer {};
+  for( IndexType idx = 0; idx < weights.size(); ++idx )
+  {
+    Cartesian< Real > const r2 { points( 0, idx ), 0, points( 1, idx ) };
+    auto const integrand = weights[ idx ] * f( r1, r2 ) * basisValues( idx, b4 );
+
+    for( IndexType b2 = b2Min; b2 < b2Min + batchSize; ++b2 )
+    {
+      answer[ b2 - b2Min ] += conj( basisValues( idx, b2 ) ) * integrand;
+    }
+  }
+
+  LvArray::tensorOps::scale< BATCH_SIZE >( answer, 2 * pi< Real > );
+
+  return answer;
+}
+
+/**
+ * Evaluate the integral
+ * \int \phi_{b_2}^*(\vec{r}_2) \vec{f}(\vec{r}_1, \vec{r}_2) \cdot \vec{\nabla} \phi_{b_4}(\vec{r}_2) d \vec{r}_2
+ * for values of b4 in the range [b4Min, b4Min + batchSize)
+ */
+template< typename REAL, typename F >
+CArray< std::complex< REAL >, BATCH_SIZE > evaluateR2GradientIntegral(
   ArrayView2d< REAL const > const & points,
   ArrayView1d< REAL const > const & weights,
   ArrayView2d< REAL const > const & basisValues,
   ArrayView2d< Cartesian< std::complex< REAL > > const > const & basisGradients,
   Cartesian< REAL > const & r1,
-  IndexType const b2,
+  IndexType const b2Min,
+  IndexType const batchSize,
   IndexType const b4,
   F && f )
 {
   using Real = REAL;
-  using Complex = std::complex< Real >;
 
-  Complex answer = 0;
+  CArray< std::complex< Real >, BATCH_SIZE > answer {};
   for( IndexType idx = 0; idx < weights.size(); ++idx )
   {
     Cartesian< Real > const r2 { points( 0, idx ), 0, points( 1, idx ) };
-    answer = answer + weights[ idx ] * basisValues( idx, b4 ) * dot( f( r1, r2 ), basisGradients( idx, b2 ) );
+    auto const integrand = weights[ idx ] * dot( f( r1, r2 ), basisGradients( idx, b4 ) );
+
+    for( IndexType b2 = b2Min; b2 < b2Min + batchSize; ++b2 )
+    {
+      answer[ b2 - b2Min ] += conj( basisValues( idx, b2 ) ) * integrand;
+    }
   }
 
-  return 2 * pi< Real > * answer;
+  LvArray::tensorOps::scale< BATCH_SIZE >( answer, 2 * pi< Real > );
+
+  return answer;
 }
 
 /**
  * Note: here we are integrating over r1 and r2 using the logarithmic grid.
  */
-template< bool USE_GRADIENT, typename REAL, typename ATOMIC_BASIS, typename F >
+template< bool USE_GRADIENT, typename REAL, typename F >
 Array4d< std::complex< REAL > > integrateAllR1R2(
-  IndexType const nQMC1,
-  IndexType const nQMC2,
-  std::vector< ATOMIC_BASIS > const & basisFunctions,
+  QMCGrid< REAL, 3 > const & r1Grid,
+  QMCGrid< REAL, 2 > const & r2Grid,
   F && f )
 {
   using PolicyType = ParallelHost;
   using Real = REAL;
   using Complex = std::complex< Real >;
 
-  static_assert( std::is_same_v< Real, typename ATOMIC_BASIS::Real > );
+  using InnerIntegralType = std::conditional_t< USE_GRADIENT, Complex, Real >;
 
-  IndexType const nBasis = basisFunctions.size();
+  LVARRAY_ERROR_IF( USE_GRADIENT && !r2Grid.gradientsStored(), "The gradients need to be stored." );
+  LVARRAY_ERROR_IF_NE( r1Grid.nBasis(), r2Grid.nBasis() );
 
-  QMCGrid< Real, 3 > const r1Grid( nQMC1, basisFunctions, false );
-  QMCGrid< Real, 2 > const r2Grid( nQMC2, basisFunctions, USE_GRADIENT );
+  IndexType const nBasis = r1Grid.nBasis();
 
   Array4d< Complex > answer( nBasis, nBasis, nBasis, nBasis );
 
@@ -181,8 +219,6 @@ Array4d< std::complex< REAL > > integrateAllR1R2(
   ArrayView2d< Real const > const r2BasisValues = r2Grid.basisValues.toViewConst();
   ArrayView2d< Cartesian< Complex > const > const r2BasisGradients = r2Grid.basisGradients.toViewConst();
 
-  TCSCF_MARK_SCOPE( "integrate" );
-
   forAll< DefaultPolicy< PolicyType > >( r1Grid.quadratureGrid.points.size( 1 ),
     [=, answer=answer.toView()] ( IndexType const idx )
     {
@@ -190,42 +226,59 @@ Array4d< std::complex< REAL > > integrateAllR1R2(
 
       Real const r1Weight = r1Weights( idx );
 
-      for( IndexType b2 = 0; b2 < nBasis; ++b2 )
+      for( IndexType b4 = 0; b4 < nBasis; ++b4 )
       {
-        for( IndexType b4 = 0; b4 < nBasis; ++b4 )
+        for( IndexType b2Min = 0; b2Min < nBasis; b2Min += BATCH_SIZE )
         {
-          Complex innerIntegral;
+          IndexType const curBatchSize = std::min( nBasis - b2Min, BATCH_SIZE );
+
+          CArray< InnerIntegralType, BATCH_SIZE > innerIntegral;
           if constexpr ( USE_GRADIENT )
           {
-            innerIntegral = r1Weight * evaluateR2GradientIntegral(
+            innerIntegral = evaluateR2GradientIntegral(
               r2Points,
               r2Weights,
               r2BasisValues,
               r2BasisGradients,
               r1,
-              b2,
+              b2Min,
+              curBatchSize,
               b4,
               f );
           }
           else
           {
-            innerIntegral = r1Weight * evaluateR2Integral(
+            innerIntegral = evaluateR2Integral(
               r2Points,
               r2Weights,
               r2BasisValues,
               r1,
-              b2,
+              b2Min,
+              curBatchSize,
               b4,
               f );
           }
-          
-          for( IndexType b1 = 0; b1 < nBasis; ++b1 )
+
+          LvArray::tensorOps::scale< BATCH_SIZE >( innerIntegral, r1Weight );
+
+          for( IndexType b2 = b2Min; b2 < b2Min + curBatchSize; ++b2 )
           {
-            for( IndexType b3 = 0; b3 < nBasis; ++b3 )
+            for( IndexType b1 = 0; b1 < nBasis; ++b1 )
             {
-              Complex const r1Contrib = conj( r1BasisValues( idx, b1 ) ) * r1BasisValues( idx, b3 );
-              Complex const addition = innerIntegral * r1Contrib;
-              atomicAdd< PolicyType >( &answer( b1, b2, b3, b4 ), addition );
+              for( IndexType b3 = 0; b3 < nBasis; ++b3 )
+              {
+                Complex const r1Contrib = conj( r1BasisValues( idx, b1 ) ) * r1BasisValues( idx, b3 );
+                Complex const addition = innerIntegral[ b2 - b2Min ] * r1Contrib;
+                
+                if constexpr ( USE_GRADIENT )
+                {
+                  atomicAdd< PolicyType >( &answer( b2, b1, b4, b3 ), addition );
+                }
+                else
+                {
+                  atomicAdd< PolicyType >( &answer( b1, b2, b3, b4 ), addition );
+                }
+              }
             }
           }
         }

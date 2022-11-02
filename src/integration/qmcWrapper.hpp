@@ -102,6 +102,8 @@ public:
   QMCCache( IndexType const minGridSize ):
     _points( 1, 2 * Integrator {}.get_next_n( minGridSize ) )
   {
+    TCSCF_MARK_SCOPE( "QMCCache::QMCCache" );
+
     Integrator integrator;
     integrator.maxeval = 1;
     integrator.minn = minGridSize;

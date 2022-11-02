@@ -173,13 +173,12 @@ int createBasisFunctions(
  * 
  */
 Array4d< std::complex< double > > computeR(
-  int const r1GridSize,
-  int const r2GridSize,
-  std::vector< OchiBasisFunction< double > > const & basisFunctions )
+  integration::QMCGrid< double, 3 > const & r1Grid,
+  integration::QMCGrid< double, 2 > const & r2Grid )
 {
   TCSCF_MARK_FUNCTION;
 
-  return integration::integrateAllR1R2< false, double >( r1GridSize, r2GridSize, basisFunctions,
+  return integration::integrateAllR1R2< false, double >( r1Grid, r2Grid,
     [] ( Cartesian< double > const & r1, Cartesian< double > const & r2 )
     {
       double const r12 = (r1 - r2).r();
@@ -192,21 +191,13 @@ Array4d< std::complex< double > > computeR(
  * 
  */
 Array4d< std::complex< double > > computeLOppositeSpin(
-  int const r1GridSize,
-  int const r2GridSize,
-  std::vector< OchiBasisFunction< double > > const & basisFunctions,
+  integration::QMCGrid< double, 3 > const & r1Grid,
+  integration::QMCGrid< double, 2 > const & r2Grid,
   jastrowFunctions::Ochi< double > const & u )
 {
   TCSCF_MARK_FUNCTION;
 
-  // LVARRAY_UNUSED_VARIABLE( r1GridSize );
-  // LVARRAY_UNUSED_VARIABLE( r2GridSize );
-  // LVARRAY_UNUSED_VARIABLE( basisFunctions );
-  // LVARRAY_UNUSED_VARIABLE( u );
-
-  // return {};
-
-  return integration::integrateAllR1R2< false, double >( r1GridSize, r2GridSize, basisFunctions,
+  return integration::integrateAllR1R2< false, double >( r1Grid, r2Grid,
     [&u] ( Cartesian< double > const & r1, Cartesian< double > const & r2 )
     {
       return u.laplacian( r1, r2, false );
@@ -218,14 +209,13 @@ Array4d< std::complex< double > > computeLOppositeSpin(
  * 
  */
 Array4d< std::complex< double > > computeGOppositeSpin(
-  int const r1GridSize,
-  int const r2GridSize,
-  std::vector< OchiBasisFunction< double > > const & basisFunctions,
+  integration::QMCGrid< double, 3 > const & r1Grid,
+  integration::QMCGrid< double, 2 > const & r2Grid,
   jastrowFunctions::Ochi< double > const & u )
 {
   TCSCF_MARK_FUNCTION;
 
-  return integration::integrateAllR1R2< false, double >( r1GridSize, r2GridSize, basisFunctions,
+  return integration::integrateAllR1R2< false, double >( r1Grid, r2Grid,
     [&u] ( Cartesian< double > const & r1, Cartesian< double > const & r2 )
     {
       Cartesian< double > const grad1 = u.gradient( r1, r2, false );
@@ -238,14 +228,13 @@ Array4d< std::complex< double > > computeGOppositeSpin(
  * 
  */
 Array4d< std::complex< double > > computeDOppositeSpin(
-  int const r1GridSize,
-  int const r2GridSize,
-  std::vector< OchiBasisFunction< double > > const & basisFunctions,
+  integration::QMCGrid< double, 3 > const & r1Grid,
+  integration::QMCGrid< double, 2 > const & r2Grid,
   jastrowFunctions::Ochi< double > const & u )
 {
   TCSCF_MARK_FUNCTION;
   
-  return integration::integrateAllR1R2< true, double >( r1GridSize, r2GridSize, basisFunctions,
+  return integration::integrateAllR1R2< true, double >( r1Grid, r2Grid,
     [&u] ( Cartesian< double > const & r1, Cartesian< double > const & r2 )
     {
       return u.gradient( r2, r1, false );
@@ -313,16 +302,16 @@ void computeH2Prime(
         for( int m = 0; m < nBasis; ++m )
         {
           std::complex< double > const h2_oppo_jl_im =
-            R( j, ell, i, m ) - GOppo( j, ell, i, m ) + DPOppo( ell, j, m, i ) - conj( DPOppo( m, i, ell, j ) );
+            R( j, ell, i, m ) - GOppo( j, ell, i, m ) + DPOppo( j, ell, i, m ) - conj( DPOppo( i, m, j, ell ) );
           std::complex< double > const h2_oppo_lj_mi =
-            R( ell, j, m, i ) - GOppo( ell, j, m, i ) + DPOppo( j, ell, i, m ) - conj( DPOppo( i, m, j, ell ) );
+            R( ell, j, m, i ) - GOppo( ell, j, m, i ) + DPOppo( ell, j, m, i ) - conj( DPOppo( m, i, ell, j ) );
 
           h2PrimeOppo( j, ell, i, m ) = h2_oppo_jl_im + h2_oppo_lj_mi;
 
           std::complex< double > const h2_same_jl_im =
-            R( j, ell, i, m ) - GOppo( j, ell, i, m ) / 4 + DPOppo( ell, j, m, i ) / 2 - conj( DPOppo( m, i, ell, j ) ) / 2;
+            R( j, ell, i, m ) - GOppo( j, ell, i, m ) / 4 + DPOppo( j, ell, i, m ) / 2 - conj( DPOppo( i, m, j, ell ) ) / 2;
           std::complex< double > const h2_same_lj_mi =
-            R( ell, j, m, i ) - GOppo( ell, j, m, i ) / 4 + DPOppo( j, ell, i, m ) / 2 - conj( DPOppo( i, m, j, ell ) ) / 2;
+            R( ell, j, m, i ) - GOppo( ell, j, m, i ) / 4 + DPOppo( ell, j, m, i ) / 2 - conj( DPOppo( m, i, ell, j ) ) / 2;
           
           h2PrimeSame( j, ell, i, m ) = h2_same_jl_im + h2_same_lj_mi;
         }
@@ -371,8 +360,11 @@ void ochiHF(
   {
     Array2d< double > const coreMatrix( nBasis, nBasis );
     fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
+
+    integration::QMCGrid< double, 3 > const r1Grid( r1GridSize, basisFunctions, false );
+    integration::QMCGrid< double, 2 > const r2Grid( r2GridSize, basisFunctions, std::is_same_v< HF_CALCULATOR, TCHartreeFock< std::complex< double > > > );
     
-    Array4d< std::complex< double > > R = computeR( r1GridSize, r2GridSize, basisFunctions );
+    Array4d< std::complex< double > > R = computeR( r1Grid, r2Grid );
   
     std::cout << std::setprecision( 10 );
 
@@ -390,9 +382,9 @@ void ochiHF(
 
       jastrowFunctions::Ochi< double > const u { a, a12, c, S };
 
-      // Array4d< std::complex< double > > const LOppo = computeLOppositeSpin( r1GridSize, r2GridSize, basisFunctions, u );
-      Array4d< std::complex< double > > const GOppo = computeGOppositeSpin( r1GridSize, r2GridSize, basisFunctions, u );
-      Array4d< std::complex< double > > const DOppo = computeDOppositeSpin( r1GridSize, r2GridSize, basisFunctions, u );
+      // Array4d< std::complex< double > > const LOppo = computeLOppositeSpin( r1Grid, r2Grid, u );
+      Array4d< std::complex< double > > const GOppo = computeGOppositeSpin( r1Grid, r2Grid, u );
+      Array4d< std::complex< double > > const DOppo = computeDOppositeSpin( r1Grid, r2Grid, u );
 
       Array4d< std::complex< double > > const h2PrimeOppo( nBasis, nBasis, nBasis, nBasis );
       Array4d< std::complex< double > > const h2PrimeSame( nBasis, nBasis, nBasis, nBasis );

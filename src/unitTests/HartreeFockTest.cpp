@@ -505,12 +505,12 @@ TEST( HartreeFock, RestrictedClosedShell )
   ochiHF< RCSHartreeFock< std::complex< double > > >( clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
 }
 
-// TEST( HartreeFock, UnrestrictedOpenShell )
-// {
-//   TCSCF_MARK_SCOPE( "Unrestricted Open Shell" );
+TEST( HartreeFock, UnrestrictedOpenShell )
+{
+  TCSCF_MARK_SCOPE( "Unrestricted Open Shell" );
 
-//   ochiHF< UOSHartreeFock< std::complex< double > > >( clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
-// }
+  ochiHF< UOSHartreeFock< std::complex< double > > >( clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
+}
 
 // TEST( HartreeFock, Transcorrelated )
 // {
@@ -524,6 +524,13 @@ TEST( NewHartreeFock, RestrictedClosedShell )
   TCSCF_MARK_SCOPE( "New restricted closed shell" );
 
   ochiNewHF< RCSHartreeFock< std::complex< double > > >( clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
+}
+
+TEST( NewHartreeFock, UnrestrictedOpenShell )
+{
+  TCSCF_MARK_SCOPE( "New unrestricted open shell" );
+
+  ochiNewHF< UOSHartreeFock< std::complex< double > > >( clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
 }
 
 } // namespace tcscf::testing

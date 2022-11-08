@@ -34,22 +34,6 @@ struct RCSHartreeFock
   RCSHartreeFock( int const numSpinUp, int const numSpinDown, int const numBasisFunctions ):
     RCSHartreeFock( numSpinUp + numSpinDown, numBasisFunctions )
   {}
-  
-  /**
-   */
-  void constructFockOperator(
-    ArrayView2d< T const > const & oneElectronTerms,
-    ArrayView2d< T const > const & twoElectronTerms );
-
-  /**
-   */
-  void evaluateTwoElectronTerms(
-    integration::QMCGrid< Real, 3 > const & r1Grid,
-    integration::QMCGrid< Real, 2 > const & r2Grid,
-    ArrayView2d< T const > const & r1OccupiedValues,
-    ArrayView2d< T const > const & r2OccupiedValues,
-    ArrayView2d< T > const & innerIntegralsKI,
-    ArrayView1d< T > const & innerIntegralsKK );
 
   /**
    */
@@ -102,7 +86,7 @@ struct UOSHartreeFock
     density( 2, numBasisFunctions, numBasisFunctions ),
     fockOperator( 2, numBasisFunctions, numBasisFunctions ),
     eigenvalues( 2, numBasisFunctions ),
-    eigenvectors( 2, numBasisFunctions, numBasisFunctions ),
+    eigenvectors( 2, numBasisFunctions, std::max( numSpinUp, numSpinDown ) ),
     _support( 2 * std::max( numSpinUp, numSpinDown ) )
   {}
   
@@ -112,7 +96,6 @@ struct UOSHartreeFock
     bool const orthogonal,
     ArrayView2d< T const > const & overlap,
     ArrayView2d< Real const > const & oneElectronTerms,
-    ArrayView4d< T const > const & twoElectronTerms,
     integration::QMCGrid< Real, 3 > const & r1Grid,
     integration::QMCGrid< Real, 2 > const & r2Grid );
 

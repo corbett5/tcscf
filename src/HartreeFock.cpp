@@ -317,21 +317,6 @@ void evaluateTwoElectronTerms(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 template< typename T >
-void RCSHartreeFock< T >::constructFockOperator(
-  ArrayView2d< T const > const & oneElectronTerms,
-  ArrayView2d< T const > const & twoElectronTerms )
-{
-  for( IndexType u = 0; u < basisSize; ++u )
-  {
-    for( IndexType v = 0; v < basisSize; ++v )
-    {
-      fockOperator( u, v ) = oneElectronTerms( u, v ) + twoElectronTerms( u, v );
-    }
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////
-template< typename T >
 RealType< T > RCSHartreeFock< T >::compute(
   bool const orthogonal,
   ArrayView2d< T const > const & overlap,
@@ -521,18 +506,12 @@ RealType< T > UOSHartreeFock< T >::compute(
   bool const orthogonal,
   ArrayView2d< T const > const & overlap,
   ArrayView2d< Real const > const & oneElectronTerms,
-  ArrayView4d< T const > const & twoElectronTerms,
   integration::QMCGrid< Real, 3 > const & r1Grid,
   integration::QMCGrid< Real, 2 > const & r2Grid )
 {
   TCSCF_MARK_FUNCTION;
 
   LVARRAY_ERROR_IF_NE( oneElectronTerms.size( 1 ), basisSize );
-
-  LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 0 ), basisSize );
-  LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 1 ), basisSize );
-  LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 2 ), basisSize );
-  LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 3 ), basisSize );
 
   if( !orthogonal )
   {
@@ -566,16 +545,6 @@ RealType< T > UOSHartreeFock< T >::compute(
   {
     for( int spin = 0; spin < 2; ++spin )
     {
-      internal::constructFockOperator(
-        fockOperator[ spin ],
-        oneElectronTerms,
-        twoElectronTerms,
-        density[ spin ].toSliceConst(),
-        density[ !spin ].toSliceConst() );
-    }
-
-    for( int spin = 0; spin < 2; ++spin )
-    {
       internal::occupiedOrbitalValues( r1OccupiedValues[ spin ].toView(), r1Grid.basisValues.toViewConst(), eigenvectors[ spin ].toSliceConst() );
       internal::occupiedOrbitalValues( r2OccupiedValues[ spin ].toView(), r2Grid.basisValues.toViewConst(), eigenvectors[ spin ].toSliceConst() );
     }
@@ -589,30 +558,29 @@ RealType< T > UOSHartreeFock< T >::compute(
         r2OccupiedValues[ spin ].toSliceConst(),
         innerIntegralsKI[ spin ],
         innerIntegralsKK[ spin ] );
+    }
 
-      {
-        TCSCF_MARK_SCOPE( "Constructing fock operator" );
-        forAll< DefaultPolicy< ParallelHost > >( r1Grid.nGrid(),
-          [&] ( IndexType const r1Idx )
+    for( int spin = 0; spin < 2; ++spin )
+    {
+      TCSCF_MARK_SCOPE( "Constructing fock operator" );
+
+      // TODO: Move calculating the energy into this function
+      forAll< DefaultPolicy< ParallelHost > >( basisSize * basisSize,
+        [&] ( IndexType const ji )
+        {
+          IndexType const j = ji / basisSize;
+          IndexType const i = ji % basisSize;
+
+          T twoElectronContribution = 0;
+          for( IndexType r1Idx = 0; r1Idx < r1Grid.nGrid(); ++r1Idx )
           {
-            for( IndexType j = 0; j < basisSize; ++j )
-            {
-              for( IndexType i = 0; i < basisSize; ++i )
-              {
-                T const twoElectronTerms = conj( r1Grid.basisValues( r1Idx, j ) ) *
-                  (r1Grid.basisValues( r1Idx, i ) * (innerIntegralsKK( spin, r1Idx ) + innerIntegralsKK( !spin, r1Idx )) - innerIntegralsKI( spin, r1Idx, i ));
-                
-                auto value = oneElectronTerms( j, i ) + twoElectronTerms;
-                auto diff = fockOperator( spin, j, i ) - value;
-                LVARRAY_ERROR_IF_GT( std::abs( diff.real() ), 1e-7 );
-                LVARRAY_ERROR_IF_GT( std::abs( diff.imag() ), 1e-7 );
-
-                // atomicAdd< ParallelHost >( &fockOperator( spin, j, i ), oneElectronTerms( j, i ) + twoElectronTerms );
-              }
-            }
+            twoElectronContribution += conj( r1Grid.basisValues( r1Idx, j ) ) *
+              (r1Grid.basisValues( r1Idx, i ) * (innerIntegralsKK( spin, r1Idx ) + innerIntegralsKK( !spin, r1Idx )) - innerIntegralsKI( spin, r1Idx, i ));
           }
-        );
-      }
+
+          fockOperator( spin, j, i ) = oneElectronTerms( j, i ) + twoElectronContribution;
+        }
+      );
     }
 
     Real const newEnergy = internal::calculateEnergy(

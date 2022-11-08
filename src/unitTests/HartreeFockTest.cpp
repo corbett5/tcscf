@@ -248,6 +248,7 @@ void compareLAndD(
   ArrayView4d< std::complex< double > const > const & DPOppo )
 {
   TCSCF_MARK_FUNCTION;
+  LVARRAY_ERROR( "No longer using DPOppo, need to fix." );
 
   IndexType const nBasis = LOppo.size( 0 );
   Array4d< std::complex< double > > LFromD( nBasis, nBasis, nBasis, nBasis );
@@ -280,7 +281,7 @@ void computeH2Prime(
   ArrayView4d< std::complex< double > > const & h2PrimeSame,
   ArrayView4d< std::complex< double > const > const & R,
   ArrayView4d< std::complex< double > const > const & GOppo,
-  ArrayView4d< std::complex< double > const > const & DPOppo )
+  ArrayView4d< std::complex< double > const > const & DOppo )
 {
   TCSCF_MARK_FUNCTION;
 
@@ -302,16 +303,16 @@ void computeH2Prime(
         for( int m = 0; m < nBasis; ++m )
         {
           std::complex< double > const h2_oppo_jl_im =
-            R( j, ell, i, m ) - GOppo( j, ell, i, m ) + DPOppo( j, ell, i, m ) - conj( DPOppo( i, m, j, ell ) );
+            R( j, ell, i, m ) - GOppo( j, ell, i, m ) + DOppo( j, ell, i, m ) - conj( DOppo( i, m, j, ell ) );
           std::complex< double > const h2_oppo_lj_mi =
-            R( ell, j, m, i ) - GOppo( ell, j, m, i ) + DPOppo( ell, j, m, i ) - conj( DPOppo( m, i, ell, j ) );
+            R( ell, j, m, i ) - GOppo( ell, j, m, i ) + DOppo( ell, j, m, i ) - conj( DOppo( m, i, ell, j ) );
 
           h2PrimeOppo( j, ell, i, m ) = h2_oppo_jl_im + h2_oppo_lj_mi;
 
           std::complex< double > const h2_same_jl_im =
-            R( j, ell, i, m ) - GOppo( j, ell, i, m ) / 4 + DPOppo( j, ell, i, m ) / 2 - conj( DPOppo( i, m, j, ell ) ) / 2;
+            R( j, ell, i, m ) - GOppo( j, ell, i, m ) / 4 + DOppo( j, ell, i, m ) / 2 - conj( DOppo( i, m, j, ell ) ) / 2;
           std::complex< double > const h2_same_lj_mi =
-            R( ell, j, m, i ) - GOppo( ell, j, m, i ) / 4 + DPOppo( ell, j, m, i ) / 2 - conj( DPOppo( m, i, ell, j ) ) / 2;
+            R( ell, j, m, i ) - GOppo( ell, j, m, i ) / 4 + DOppo( ell, j, m, i ) / 2 - conj( DOppo( m, i, ell, j ) ) / 2;
           
           h2PrimeSame( j, ell, i, m ) = h2_same_jl_im + h2_same_lj_mi;
         }
@@ -319,6 +320,16 @@ void computeH2Prime(
     }
   }
 }
+
+// void computeH3Prime(
+//   ArrayView6d< std::complex< double > > const & h3PrimeUpUpUp,
+//   ArrayView6d< std::complex< double > > const & hePrimeUpDownDown,
+//   ArrayView6d< std::complex< double > > const & h3PrimeUpUpDown,
+//   ArrayView6d< std::complex< double > > const & h3PrimeUpDownUp,
+//   ArrayView6d< std::complex< double > const > const & integrals )
+// {
+
+// }
 
 /**
  * 
@@ -331,7 +342,8 @@ void ochiHF(
   int const r1GridSize,
   int const r2GridSize )
 {
-  TCSCF_MARK_FUNCTION;
+  using Real = double;
+  using Complex = std::complex< Real >;
 
   constexpr double HF_LIMIT = -2.861679995612;
 
@@ -339,55 +351,57 @@ void ochiHF(
   int const nSpinUp = 1;
   int const nSpinDown = 1;
 
-  double alpha = initialAlpha;
+  Real alpha = initialAlpha;
 
-  std::vector< OchiBasisFunction< double > > basisFunctions;
+  std::vector< OchiBasisFunction< Real > > basisFunctions;
   int const nBasis = createBasisFunctions( nMax, lMax, alpha, basisFunctions );
 
   LVARRAY_LOG( "nMax = " << nMax << ", lMax = " << lMax << ", nBasis = " << nBasis <<
                ", r1 grid size = " << r1GridSize << ", r2 grid size = " << r2GridSize << ", alpha = " << alpha );
 
-  integration::QuadratureGrid< double > const coreGrid = integration::createGrid(
-    integration::ChebyshevGauss< double >( 1000 ),
-    integration::changeOfVariables::TreutlerAhlrichsM4< double >( 1, 0.9 ) );
+  integration::QuadratureGrid< Real > const coreGrid = integration::createGrid(
+    integration::ChebyshevGauss< Real >( 1000 ),
+    integration::changeOfVariables::TreutlerAhlrichsM4< Real >( 1, 0.9 ) );
 
   HF_CALCULATOR hfCalculator( nSpinUp, nSpinDown, basisFunctions.size() );
 
-  Array1d< double > energies;
+  Array1d< Real > energies;
 
   int const nIter = 30;
   for( int iter = 0; iter < nIter; ++iter )
   {
-    Array2d< double > const coreMatrix( nBasis, nBasis );
+    Array2d< Real > const coreMatrix( nBasis, nBasis );
     fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
 
-    integration::QMCGrid< double, 3 > const r1Grid( r1GridSize, basisFunctions, false );
-    integration::QMCGrid< double, 2 > const r2Grid( r2GridSize, basisFunctions, std::is_same_v< HF_CALCULATOR, TCHartreeFock< std::complex< double > > > );
+    integration::QMCGrid< Real, 3 > const r1Grid( r1GridSize, basisFunctions, false );
+    integration::QMCGrid< Real, 2 > const r2Grid( r2GridSize, basisFunctions, std::is_same_v< HF_CALCULATOR, TCHartreeFock< Complex > > );
     
-    Array4d< std::complex< double > > R = computeR( r1Grid, r2Grid );
+    Array4d< Complex > R = computeR( r1Grid, r2Grid );
   
     std::cout << std::setprecision( 10 );
 
-    double energy = 0;
-    if constexpr ( std::is_same_v< HF_CALCULATOR, TCHartreeFock< std::complex< double > > > )
+    Real energy = 0;
+    if constexpr ( std::is_same_v< HF_CALCULATOR, TCHartreeFock< Complex > > )
     {
-      double const a = 1.5;
-      double const a12 = a;
+      Real const a = 1.5;
+      Real const a12 = a;
       Array2d< int > S( 1, 3 );
       S( 0, 0 ) = 1;
 
-      Array2d< double > c( 1, 2 );
+      Array2d< Real > c( 1, 2 );
       c( 0, false ) = a12 / 2;
       c( 0, true ) = a12 / 4;
 
-      jastrowFunctions::Ochi< double > const u { a, a12, c, S };
+      jastrowFunctions::Ochi< Real > const u { a, a12, c, S };
 
-      // Array4d< std::complex< double > > const LOppo = computeLOppositeSpin( r1Grid, r2Grid, u );
-      Array4d< std::complex< double > > const GOppo = computeGOppositeSpin( r1Grid, r2Grid, u );
-      Array4d< std::complex< double > > const DOppo = computeDOppositeSpin( r1Grid, r2Grid, u );
+      // Array4d< Complex > const LOppo = computeLOppositeSpin( r1Grid, r2Grid, u );
+      Array4d< Complex > const GOppo = computeGOppositeSpin( r1Grid, r2Grid, u );
+      Array4d< Complex > const DOppo = computeDOppositeSpin( r1Grid, r2Grid, u );
 
-      Array4d< std::complex< double > > const h2PrimeOppo( nBasis, nBasis, nBasis, nBasis );
-      Array4d< std::complex< double > > const h2PrimeSame( nBasis, nBasis, nBasis, nBasis );
+      // threeElectronIntegrals( r1Grid, r1Grid, u );
+
+      Array4d< Complex > const h2PrimeOppo( nBasis, nBasis, nBasis, nBasis );
+      Array4d< Complex > const h2PrimeSame( nBasis, nBasis, nBasis, nBasis );
 
       computeH2Prime( h2PrimeOppo, h2PrimeSame, R, GOppo, DOppo );
 
@@ -419,19 +433,97 @@ void ochiHF(
 }
 
 
+template< typename HF_CALCULATOR >
+void ochiNewHF(
+  int const nMax,
+  int const lMax,
+  double const initialAlpha,
+  int const r1GridSize,
+  int const r2GridSize )
+{
+  using Real = double;
+  using Complex = std::complex< Real >;
+
+  constexpr double HF_LIMIT = -2.861679995612;
+
+  int const Z = 2;
+  int const nSpinUp = 1;
+  int const nSpinDown = 1;
+
+  Real alpha = initialAlpha;
+
+  std::vector< OchiBasisFunction< Real > > basisFunctions;
+  int const nBasis = createBasisFunctions( nMax, lMax, alpha, basisFunctions );
+
+  LVARRAY_LOG( "nMax = " << nMax << ", lMax = " << lMax << ", nBasis = " << nBasis <<
+               ", r1 grid size = " << r1GridSize << ", r2 grid size = " << r2GridSize << ", alpha = " << alpha );
+
+  integration::QuadratureGrid< Real > const coreGrid = integration::createGrid(
+    integration::ChebyshevGauss< Real >( 1000 ),
+    integration::changeOfVariables::TreutlerAhlrichsM4< Real >( 1, 0.9 ) );
+
+  HF_CALCULATOR hfCalculator( nSpinUp, nSpinDown, basisFunctions.size() );
+
+  Array1d< Real > energies;
+
+  int const nIter = 30;
+  for( int iter = 0; iter < nIter; ++iter )
+  {
+    Array2d< Real > const coreMatrix( nBasis, nBasis );
+    fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
+
+    integration::QMCGrid< Real, 3 > const r1Grid( r1GridSize, basisFunctions, false );
+    integration::QMCGrid< Real, 2 > const r2Grid( r2GridSize, basisFunctions, std::is_same_v< HF_CALCULATOR, TCHartreeFock< Complex > > );
+    
+    std::cout << std::setprecision( 10 );
+
+    Real energy = hfCalculator.compute( true, {}, coreMatrix, r1Grid, r2Grid );
+
+    if( nIter - iter <= 10 )
+    {
+      energies.emplace_back( energy );
+    }
+
+    alpha = std::sqrt( -2 * hfCalculator.highestOccupiedOrbitalEnergy() );
+
+    printf( "\r    iteration = %4d, energy = %10.6F, error = %e, alpha = %10.6F", iter, energy, std::abs( HF_LIMIT - energy ), alpha );
+    fflush( stdout );
+
+    createBasisFunctions( nMax, lMax, alpha, basisFunctions );
+  }
+
+  auto const [mean, standardDev] = meanAndStd( energies.toViewConst() );
+  double const error = std::abs( HF_LIMIT - mean );
+  printf( "\renergy = %.6F +/- %.2e Ht, error = %.2e Ht, alpha = %.6F                     \n", mean, standardDev, error, alpha );
+}
+
+
 TEST( HartreeFock, RestrictedClosedShell )
 {
+  TCSCF_MARK_SCOPE( "Restricted closed shell" );
+
   ochiHF< RCSHartreeFock< std::complex< double > > >( clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
 }
 
-TEST( HartreeFock, UnrestrictedOpenShell )
-{
-  ochiHF< UOSHartreeFock< std::complex< double > > >( clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
-}
+// TEST( HartreeFock, UnrestrictedOpenShell )
+// {
+//   TCSCF_MARK_SCOPE( "Unrestricted Open Shell" );
 
-TEST( HartreeFock, Transcorrelated )
+//   ochiHF< UOSHartreeFock< std::complex< double > > >( clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
+// }
+
+// TEST( HartreeFock, Transcorrelated )
+// {
+//   TCSCF_MARK_SCOPE( "Transcorrelated" );
+
+//   ochiHF< TCHartreeFock< std::complex< double > > >( clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
+// }
+
+TEST( NewHartreeFock, RestrictedClosedShell )
 {
-  ochiHF< TCHartreeFock< std::complex< double > > >( clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
+  TCSCF_MARK_SCOPE( "New restricted closed shell" );
+
+  ochiNewHF< RCSHartreeFock< std::complex< double > > >( clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
 }
 
 } // namespace tcscf::testing
@@ -450,4 +542,4 @@ int main( int argc, char * * argv )
   return result;
 }
 
-// clear; ninja HartreeFockTest && ./tests/HartreeFockTest -n2 -l0 -a 1.31 --r1 1000 --r2 1000
+// clear; ninja HartreeFockTest && ./tests/HartreeFockTest -n2 -l0 -a 1.355 --r1 1000 --r2 1000 -c runtime-report,max_column_width=200

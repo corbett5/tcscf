@@ -70,6 +70,14 @@ using Array4d = Array< T, 4, PERM >;
 template< typename T, int USD=3 >
 using ArrayView4d = ArrayView< T, 4, USD >;
 
+/// A six dimensional array.
+template< typename T, typename PERM=camp::make_idx_seq_t< 6 > >
+using Array6d = Array< T, 6, PERM >;
+
+/// A six dimensional view.
+template< typename T, int USD=5 >
+using ArrayView6d = ArrayView< T, 6, 5 >;
+
 template< typename T >
 using ArrayOfArrays = LvArray::ArrayOfArrays< T, IndexType, LvArray::ChaiBuffer >;
 

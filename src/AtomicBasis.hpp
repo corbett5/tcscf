@@ -4,6 +4,7 @@
 #include "caliperInterface.hpp"
 #include "integration/qmcWrapper.hpp"
 #include "mathFunctions.hpp"
+#include "RAJAInterface.hpp"
 
 #include <iostream>
 

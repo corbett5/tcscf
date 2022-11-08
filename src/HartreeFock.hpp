@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AtomicBasis.hpp"
+#include "integration/integrateAll.hpp"
 
 #include "dense/common.hpp"
 
@@ -22,7 +23,7 @@ struct RCSHartreeFock
     density( numBasisFunctions, numBasisFunctions ),
     fockOperator( numBasisFunctions, numBasisFunctions ),
     eigenvalues( numBasisFunctions ),
-    eigenvectors( numBasisFunctions, numBasisFunctions ),
+    eigenvectors( numBasisFunctions, numElectrons / 2 ),
     _support( 2 * numBasisFunctions )
   {
     LVARRAY_ERROR_IF_NE( numElectrons % 2, 0 );
@@ -34,6 +35,31 @@ struct RCSHartreeFock
     RCSHartreeFock( numSpinUp + numSpinDown, numBasisFunctions )
   {}
   
+  /**
+   */
+  void constructFockOperator(
+    ArrayView2d< T const > const & oneElectronTerms,
+    ArrayView2d< T const > const & twoElectronTerms );
+
+  /**
+   */
+  void evaluateTwoElectronTerms(
+    integration::QMCGrid< Real, 3 > const & r1Grid,
+    integration::QMCGrid< Real, 2 > const & r2Grid,
+    ArrayView2d< T const > const & r1OccupiedValues,
+    ArrayView2d< T const > const & r2OccupiedValues,
+    ArrayView2d< T > const & innerIntegralsKI,
+    ArrayView1d< T > const & innerIntegralsKK );
+
+  /**
+   */
+  RealType< T > compute(
+    bool const orthogonal,
+    ArrayView2d< T const > const & overlap,
+    ArrayView2d< Real const > const & oneElectronTerms,
+    integration::QMCGrid< Real, 3 > const & r1Grid,
+    integration::QMCGrid< Real, 2 > const & r2Grid );
+
   /**
    */
   Real compute(
@@ -80,6 +106,16 @@ struct UOSHartreeFock
     _support( 2 * std::max( numSpinUp, numSpinDown ) )
   {}
   
+  /**
+   */
+  Real compute(
+    bool const orthogonal,
+    ArrayView2d< T const > const & overlap,
+    ArrayView2d< Real const > const & oneElectronTerms,
+    ArrayView4d< T const > const & twoElectronTerms,
+    integration::QMCGrid< Real, 3 > const & r1Grid,
+    integration::QMCGrid< Real, 2 > const & r2Grid );
+
   /**
    */
   Real compute(

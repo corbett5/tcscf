@@ -2,6 +2,7 @@
 
 #include "LvArrayInterface.hpp"
 #include "caliperInterface.hpp"
+#include "RAJAInterface.hpp"
 
 #include <cmath>
 
@@ -297,7 +298,7 @@ void fillOneElectronHermitianMatrix(
 
   using ResultType = decltype( lambda( 0, 0 ) );
 
-  for( int a = 0; a < matrix.size( 0 ); ++a )
+  forAll< DefaultPolicy< ParallelHost > >( matrix.size( 0 ), [=] ( IndexType const a )
   {
     for( int b = a; b < matrix.size( 0 ); ++b )
     {
@@ -309,7 +310,7 @@ void fillOneElectronHermitianMatrix(
         matrix( b, a ) += conj( value );
       }
     }
-  }
+  } );
 }
 
 /**

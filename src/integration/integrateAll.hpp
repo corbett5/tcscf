@@ -103,6 +103,13 @@ struct QMCGrid
 
   /**
    */
+  IndexType nGrid() const
+  {
+    return basisValues.size( 0 );
+  }
+
+  /**
+   */
   bool gradientsStored() const
   {
     return !basisGradients.empty();
@@ -285,6 +292,131 @@ Array4d< std::complex< REAL > > integrateAllR1R2(
       }
     }
   );
+
+  return answer;
+}
+
+
+
+
+
+
+
+/**
+ * TODO: match this up with innerIntegral above
+ */
+template< typename REAL, typename JASTROW_FUNCTION >
+CArray< std::complex< REAL >, 3 > computeV(
+  ArrayView2d< REAL const > const & points,
+  ArrayView1d< REAL const > const & weights,
+  ArrayView2d< std::complex< REAL > const > const & basisValues,
+  Cartesian< REAL > const & r1,
+  IndexType const q,
+  IndexType const t,
+  JASTROW_FUNCTION const & u )
+{
+  using Real = REAL;
+  using Complex = std::complex< REAL >;
+
+  CArray< Complex, 3 > answer {};
+  for( IndexType idx = 0; idx < weights.size(); ++idx )
+  {
+    Cartesian< Real > const r2 { points( 0, idx ), points( 1, idx ), points( 2, idx ) };
+    Complex const scale = weights[ idx ] * conj( basisValues( idx, q ) ) * basisValues( idx, t );
+
+    Cartesian< Real > const gradient = u.gradient( r1, r2, true );
+    answer[ 0 ] += scale * gradient.x();
+    answer[ 1 ] += scale * gradient.y();
+    answer[ 2 ] += scale * gradient.z();
+
+    // LvArray::tensorOps::scaledAdd< 3 >( answer, u.gradient( r1, r2, true ), scale );
+  }
+
+  return answer;
+}
+
+/**
+ * 
+ */
+template< typename REAL, typename JASTROW_FUNCTION >
+Array6d< std::complex< REAL > > threeElectronIntegrals(
+  QMCGrid< REAL, 3 > const & r1Grid,
+  QMCGrid< REAL, 3 > const & r2Grid,
+  JASTROW_FUNCTION const & jastrowFunction )
+{
+  TCSCF_MARK_FUNCTION;
+
+  using PolicyType = ParallelHost;
+  using Real = REAL;
+  using Complex = std::complex< Real >;
+
+  LVARRAY_ERROR_IF_NE( r1Grid.nBasis(), r2Grid.nBasis() );
+
+  IndexType const nBasis = r1Grid.nBasis();
+
+  Array6d< Complex > answer( nBasis, nBasis, nBasis, nBasis, nBasis, nBasis );
+
+  ArrayView2d< Real const > const r1Points = r1Grid.quadratureGrid.points.toViewConst();
+  ArrayView1d< Real const > const r1Weights = r1Grid.quadratureGrid.weights.toViewConst();
+  ArrayView2d< Complex const > const r1BasisValues = r1Grid.basisValues.toViewConst();
+
+  ArrayView2d< Real const > const r2Points = r2Grid.quadratureGrid.points.toViewConst();
+  ArrayView1d< Real const > const r2Weights = r2Grid.quadratureGrid.weights.toViewConst();
+  ArrayView2d< Complex const > const r2BasisValues = r2Grid.basisValues.toViewConst();
+
+  Array3d< CArray< Complex, 3 > > V( r1Grid.quadratureGrid.points.size( 1 ), nBasis, nBasis );
+
+  {
+    TCSCF_MARK_SCOPE("Computing V");
+
+    forAll< DefaultPolicy< PolicyType > >( r1Grid.quadratureGrid.points.size( 1 ),
+      [=, V=V.toView(), &jastrowFunction] ( IndexType const idx )
+      {
+        Cartesian< Real > const r1 = { r1Points( 0, idx ), r1Points( 1, idx ), r1Points( 2, idx ) };
+
+        for( IndexType q = 0; q < nBasis; ++q )
+        {
+          for( IndexType t = 0; t < nBasis; ++t )
+          {
+            V( idx, q, t ) = computeV( r2Points, r2Weights, r2BasisValues, r1, q, t, jastrowFunction );
+          }
+        }
+      }
+    );
+  }
+
+  {
+    TCSCF_MARK_SCOPE("Computing answer");
+
+    forAll< DefaultPolicy< PolicyType > >( r1Grid.quadratureGrid.points.size( 1 ),
+      [=, answer=answer.toView(), V=V.toViewConst()] ( IndexType const idx )
+      {
+        Real const r1Weight = r1Weights( idx );
+
+        for( IndexType p = 0; p < nBasis; ++p )
+        {
+          for( IndexType q = 0; q < nBasis; ++q )
+          {
+            for( IndexType r = 0; r < nBasis; ++r )
+            {
+              for( IndexType s = 0; s < nBasis; ++s )
+              {
+                for( IndexType t = 0; t < nBasis; ++t )
+                {
+                  for( IndexType u = 0; u < nBasis; ++u )
+                  {
+                    Complex const dot = LvArray::tensorOps::AiBi< 3 >( V( idx, q, t ), V( idx, r, u ) );
+                    Complex const addition = r1Weight * conj( r1BasisValues( idx, p ) ) * dot * r1BasisValues( idx, s );
+                    atomicAdd< PolicyType >( &answer( p, q, r, s, t, u ), addition );
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    );
+  }
 
   return answer;
 }

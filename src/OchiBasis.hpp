@@ -122,8 +122,6 @@ REAL coreMatrixElement(
   OchiBasisFunction< REAL > const & b1,
   OchiBasisFunction< REAL > const & b2 )
 {
-  TCSCF_MARK_FUNCTION;
-
   LVARRAY_ERROR_IF_GT( std::abs( b1.alpha - b2.alpha ), 0 );
 
   if(b1.l != b2.l) return 0;

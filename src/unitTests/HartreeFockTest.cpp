@@ -474,7 +474,7 @@ void ochiNewHF(
     fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
 
     integration::QMCGrid< Real, 3 > const r1Grid( r1GridSize, basisFunctions, false );
-    integration::QMCGrid< Real, 3 > const r2Grid( r2GridSize, basisFunctions, std::is_same_v< HF_CALCULATOR, TCHartreeFock< Complex > > );
+    integration::QMCGrid< Real, 2 > const r2Grid( r2GridSize, basisFunctions, std::is_same_v< HF_CALCULATOR, TCHartreeFock< Complex > > );
     
     std::cout << std::setprecision( 10 );
 
@@ -550,4 +550,4 @@ int main( int argc, char * * argv )
   return result;
 }
 
-// clear; ninja HartreeFockTest && ./tests/HartreeFockTest -n9 -l0 -a 1.349 --r1 1000 --r2 2000 -c runtime-report,max_column_width=200
+// clear; ninja HartreeFockTest && ./tests/HartreeFockTest -n2 -l0 -a 1.355 --r1 1000 --r2 1000 -c runtime-report,max_column_width=200

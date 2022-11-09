@@ -190,7 +190,7 @@ void evaluateR2IntegralSumOverOccupied(
   ArraySlice1d< T const > const & occupiedValuesR1,
   ArrayView2d< T const > const & occupiedValuesR2,
   ArraySlice1d< T > const integralValues,
-  ArrayView2d< T const > const & b4Values,
+  ArrayView2d< RealType< T > const > const & b4Values,
   ArrayView2d< Cartesian< T > const > const & b4Gradients,
   SCALAR const & f,
   VECTOR const & v )
@@ -205,7 +205,7 @@ void evaluateR2IntegralSumOverOccupied(
       b2Sum += occupiedValuesR1[ b2 ] * conj( occupiedValuesR2( r2Idx, b2 ) );
     }
 
-    Cartesian< Real > const r2 { points( 0, r2Idx ), points( 1, r2Idx ), points( 2, r2Idx ) };
+    Cartesian< Real > const r2 { points( 0, r2Idx ), 0, points( 1, r2Idx ) };
     Real const scalalPotential = f( r1, r2 ) * weights[ r2Idx ];
 
     if constexpr ( std::is_same_v< VECTOR, std::nullptr_t > )
@@ -245,7 +245,7 @@ T evaluateR2Integral(
   T answer {};
   for( IndexType r2Idx = 0; r2Idx < weights.size(); ++r2Idx )
   {
-    Cartesian< Real > const r2 { points( 0, r2Idx ), points( 1, r2Idx ), points( 2, r2Idx ) };
+    Cartesian< Real > const r2 { points( 0, r2Idx ), 0, points( 1, r2Idx ) };
     auto const scalalPotential = f( r1, r2 );
 
     Real sumOfNorms = 0;
@@ -270,7 +270,7 @@ T evaluateR2Integral(
     }
   }
 
-  return answer;
+  return 2 * pi< Real > * answer;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -278,7 +278,7 @@ template< typename T, typename SCALAR, typename VECTOR=std::nullptr_t >
 void sumOccupiedAI(
   ArraySlice2d< T > const & innerIntegralsAI,
   integration::QMCGrid< RealType< T >, 3 > const & r1Grid,
-  integration::QMCGrid< RealType< T >, 3 > const & r2Grid,
+  integration::QMCGrid< RealType< T >, 2 > const & r2Grid,
   ArrayView2d< T const > const & r1OccupiedValues,
   ArrayView2d< T const > const & r2OccupiedValues,
   SCALAR && f,
@@ -296,7 +296,7 @@ void sumOccupiedAI(
 
   ArrayView2d< Real const > const r2Points = r2Grid.quadratureGrid.points.toViewConst();
   ArrayView1d< Real const > const r2Weights = r2Grid.quadratureGrid.weights.toViewConst();
-  ArrayView2d< T const > const r2BasisValues = r2Grid.basisValues.toViewConst();
+  ArrayView2d< Real const > const r2BasisValues = r2Grid.basisValues.toViewConst();
   ArrayView2d< Cartesian< T > const > const r2BasisGradients = r2Grid.basisGradients.toViewConst();
 
   forAll< DefaultPolicy< PolicyType > >( r1Grid.quadratureGrid.points.size( 1 ),
@@ -319,7 +319,7 @@ void sumOccupiedAI(
       
       for( IndexType i = 0; i < nBasis; ++i )
       {
-        innerIntegralsAI( r1Idx, i ) *= r1Weight;
+        innerIntegralsAI( r1Idx, i ) *= 2 * pi< Real > * r1Weight;
       }
     }
   );
@@ -330,7 +330,7 @@ template< typename T, typename SCALAR, typename VECTOR=std::nullptr_t >
 void sumOccupiedAA(
   ArraySlice1d< T > const & innerIntegralsAA,
   integration::QMCGrid< RealType< T >, 3 > const & r1Grid,
-  integration::QMCGrid< RealType< T >, 3 > const & r2Grid,
+  integration::QMCGrid< RealType< T >, 2 > const & r2Grid,
   ArrayView2d< T const > const & r2OccupiedValues,
   ArrayView2d< Cartesian< T > const > const r2OccupiedGradients,
   SCALAR && f,
@@ -374,7 +374,7 @@ RealType< T > RCSHartreeFock< T >::compute(
   ArrayView2d< T const > const & overlap,
   ArrayView2d< Real const > const & oneElectronTerms,
   integration::QMCGrid< Real, 3 > const & r1Grid,
-  integration::QMCGrid< Real, 3 > const & r2Grid )
+  integration::QMCGrid< Real, 2 > const & r2Grid )
 {
   TCSCF_MARK_FUNCTION;
 
@@ -575,7 +575,7 @@ RealType< T > UOSHartreeFock< T >::compute(
   ArrayView2d< T const > const & overlap,
   ArrayView2d< Real const > const & oneElectronTerms,
   integration::QMCGrid< Real, 3 > const & r1Grid,
-  integration::QMCGrid< Real, 3 > const & r2Grid )
+  integration::QMCGrid< Real, 2 > const & r2Grid )
 {
   TCSCF_MARK_FUNCTION;
 

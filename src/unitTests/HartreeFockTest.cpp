@@ -15,7 +15,7 @@ namespace tcscf::testing
 
 CommandLineOptions clo;
 
-
+int LOG_LEVEL = 0;
 
 
 template< typename POLICY_TYPE >
@@ -373,8 +373,11 @@ void ochiHF(
     Array2d< Real > const coreMatrix( nBasis, nBasis );
     fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
 
-    integration::QMCGrid< Real, 3 > const r1Grid( r1GridSize, basisFunctions, false );
-    integration::QMCGrid< Real, 2 > const r2Grid( r2GridSize, basisFunctions, std::is_same_v< HF_CALCULATOR, TCHartreeFock< Complex > > );
+    integration::QMCGrid< Real, 3 > r1Grid( r1GridSize );
+    r1Grid.setBasisFunctions( basisFunctions, false );
+
+    integration::QMCGrid< Real, 2 > r2Grid( r2GridSize );
+    r2Grid.setBasisFunctions( basisFunctions, std::is_same_v< HF_CALCULATOR, TCHartreeFock< Complex > > );
     
     Array4d< Complex > R = computeR( r1Grid, r2Grid );
   
@@ -433,6 +436,66 @@ void ochiHF(
 }
 
 
+template< typename HF_CALCULATOR, typename REAL >
+std::tuple< REAL, REAL, IndexType > alphaConvergenceLoop(
+  int const nMax,
+  int const lMax,
+  REAL const initialAlpha,
+  int const r1GridSize,
+  int const r2GridSize )
+{
+  using Real = REAL;
+
+  int const Z = 2;
+  int const nSpinUp = 1;
+  int const nSpinDown = 1;
+
+  std::vector< OchiBasisFunction< Real > > basisFunctions;
+  int const nBasis = createBasisFunctions( nMax, lMax, initialAlpha, basisFunctions );
+
+  HF_CALCULATOR hfCalculator( nSpinUp, nSpinDown, basisFunctions.size() );
+
+  integration::QuadratureGrid< Real > const coreGrid = integration::createGrid(
+    integration::ChebyshevGauss< Real >( 1000 ),
+    integration::changeOfVariables::TreutlerAhlrichsM4< Real >( 1, 0.9 ) );
+
+  integration::QMCGrid< Real, 3 > r1Grid( r1GridSize );
+  r1Grid.setBasisFunctions( basisFunctions, false );
+  
+  integration::QMCGrid< Real, 2 > r2Grid( r2GridSize );
+  r2Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
+
+  Real alpha = initialAlpha;
+  int const maxIter = 30;
+  for( int iter = 0; iter < maxIter; ++iter )
+  {
+    createBasisFunctions( nMax, lMax, alpha, basisFunctions );
+
+    Array2d< Real > const coreMatrix( nBasis, nBasis );
+    fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
+
+    Real const energy = hfCalculator.compute( true, {}, coreMatrix, r1Grid, r2Grid );
+    Real const newAlpha = std::sqrt( -2 * hfCalculator.highestOccupiedOrbitalEnergy() );
+
+    if( LOG_LEVEL > 1 )
+    {
+      LVARRAY_LOG( "\t\t number of loops to SCF convergence = " << hfCalculator.numberOfConvergenceLoops() );
+    }
+
+    if( std::abs( newAlpha - alpha ) < 1e-6 )
+    {
+      return { energy, alpha, iter + 1 };
+    }
+
+    alpha = newAlpha;
+  }
+
+  LVARRAY_ERROR( "Did not converge." );
+  return {};
+}
+
+
+
 template< typename HF_CALCULATOR >
 void ochiNewHF(
   int const nMax,
@@ -442,60 +505,32 @@ void ochiNewHF(
   int const r2GridSize )
 {
   using Real = double;
-  using Complex = std::complex< Real >;
 
   constexpr double HF_LIMIT = -2.861679995612;
 
-  int const Z = 2;
-  int const nSpinUp = 1;
-  int const nSpinDown = 1;
-
-  Real alpha = initialAlpha;
-
-  std::vector< OchiBasisFunction< Real > > basisFunctions;
-  int const nBasis = createBasisFunctions( nMax, lMax, alpha, basisFunctions );
-
-  LVARRAY_LOG( "nMax = " << nMax << ", lMax = " << lMax << ", nBasis = " << nBasis <<
-               ", r1 grid size = " << r1GridSize << ", r2 grid size = " << r2GridSize << ", alpha = " << alpha );
-
-  integration::QuadratureGrid< Real > const coreGrid = integration::createGrid(
-    integration::ChebyshevGauss< Real >( 1000 ),
-    integration::changeOfVariables::TreutlerAhlrichsM4< Real >( 1, 0.9 ) );
-
-  HF_CALCULATOR hfCalculator( nSpinUp, nSpinDown, basisFunctions.size() );
-
-  Array1d< Real > energies;
+  {
+    std::vector< OchiBasisFunction< Real > > basisFunctions;
+    createBasisFunctions( nMax, lMax, initialAlpha, basisFunctions );
+    LVARRAY_LOG( "nMax = " << nMax << ", lMax = " << lMax << ", nBasis = " << basisFunctions.size() <<
+                ", r1 grid size = " << r1GridSize << ", r2 grid size = " << r2GridSize << ", alpha = " << initialAlpha );
+  }
 
   // TODO: figure out why convergence sucks. Perhaps just pick a single integration grid.
-  int const nIter = 30;
-  for( int iter = 0; iter < nIter; ++iter )
+  Array1d< Real > energies;
+  for( int iter = 0; iter < 10; ++iter )
   {
-    Array2d< Real > const coreMatrix( nBasis, nBasis );
-    fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
-
-    integration::QMCGrid< Real, 3 > const r1Grid( r1GridSize, basisFunctions, false );
-    integration::QMCGrid< Real, 2 > const r2Grid( r2GridSize, basisFunctions, std::is_same_v< HF_CALCULATOR, TCHartreeFock< Complex > > );
-    
-    std::cout << std::setprecision( 10 );
-
-    Real energy = hfCalculator.compute( true, {}, coreMatrix, r1Grid, r2Grid );
-
-    if( nIter - iter <= 10 )
+    auto const [energy, alpha, nIter] = alphaConvergenceLoop< HF_CALCULATOR >( nMax, lMax, initialAlpha, r1GridSize, r2GridSize );
+    if( LOG_LEVEL > 0 )
     {
-      energies.emplace_back( energy );
+      double const error = std::abs( HF_LIMIT - energy );
+      printf( "\tenergy = %.6F Ht, error = %.2e Ht, alpha = %.6F, number of SCF solves = %ld\n", energy, error, alpha, nIter );
     }
-
-    alpha = std::sqrt( -2 * hfCalculator.highestOccupiedOrbitalEnergy() );
-
-    printf( "\r    iteration = %4d, energy = %10.6F, error = %e, alpha = %10.6F", iter, energy, std::abs( HF_LIMIT - energy ), alpha );
-    fflush( stdout );
-
-    createBasisFunctions( nMax, lMax, alpha, basisFunctions );
+    energies.emplace_back( energy );
   }
 
   auto const [mean, standardDev] = meanAndStd( energies.toViewConst() );
   double const error = std::abs( HF_LIMIT - mean );
-  printf( "\renergy = %.6F +/- %.2e Ht, error = %.2e Ht, alpha = %.6F                     \n", mean, standardDev, error, alpha );
+  printf( "energy = %.6F +/- %.2e Ht, error = %.2e Ht\n", mean, standardDev, error );
 }
 
 
@@ -550,4 +585,4 @@ int main( int argc, char * * argv )
   return result;
 }
 
-// clear; ninja HartreeFockTest && ./tests/HartreeFockTest -n2 -l0 -a 1.355 --r1 1000 --r2 1000 -c runtime-report,max_column_width=200
+// clear; ninja HartreeFockTest && ./tests/HartreeFockTest -n9 -l0 -a 1.355 --r1 1000 --r2 2000 -c runtime-report,max_column_width=200

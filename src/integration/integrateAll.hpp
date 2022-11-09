@@ -18,18 +18,12 @@ struct QMCGrid
 
   /**
    */
-  template< typename ATOMIC_BASIS >
-  QMCGrid(
-    IndexType gridSize,
-    std::vector< ATOMIC_BASIS > const & basisFunctions,
-    bool const storeGradients )
+  QMCGrid( IndexType gridSize )
   {
     TCSCF_MARK_SCOPE( "QMCGrid::QMCGrid" );
 
-    static_assert( std::is_same_v< REAL, typename ATOMIC_BASIS::Real > );
-
     constexpr changeOfVariables::TreutlerAhlrichsM4< REAL > rChange( 0, 0.9 );
-    constexpr changeOfVariables::Linear< REAL > thetaChange{ pi< REAL > };
+    constexpr changeOfVariables::Azimuthal< REAL > thetaChange;
     constexpr changeOfVariables::Linear< REAL > phiChange{ 2 * pi< REAL > };
 
     QMCCache< NDIM, REAL > const qmcCache( gridSize );
@@ -42,13 +36,6 @@ struct QMCGrid
     {
       quadratureGrid = integration::createGrid( qmcCache,
         changeOfVariables::createMultiple< REAL, 3 >( rChange, thetaChange, phiChange ) );
-    }
-
-    IndexType const nBasis = basisFunctions.size();
-    basisValues.resize( quadratureGrid.weights.size(), nBasis );
-    if( storeGradients )
-    {
-      basisGradients.resize( quadratureGrid.weights.size(), nBasis );
     }
 
     forAll< DefaultPolicy< ParallelHost > >( quadratureGrid.weights.size(),
@@ -73,23 +60,6 @@ struct QMCGrid
 
         REAL const jacobian = std::pow( r.r(), 2 ) * std::sin( r.theta() );
         quadratureGrid.weights( i ) *= jacobian;
-
-        for( int b = 0; b < nBasis; ++b )
-        {
-          if constexpr ( NDIM == 2 )
-          {
-            basisValues( i, b ) = std::real( basisFunctions[ b ]( r ) );
-          }
-          else
-          {
-            basisValues( i, b ) = basisFunctions[ b ]( r );
-          }
-
-          if( storeGradients )
-          {
-            basisGradients( i, b ) = basisFunctions[ b ].gradient( r );
-          }
-        }
       }
     );
   };
@@ -115,6 +85,56 @@ struct QMCGrid
     return !basisGradients.empty();
   }
 
+  template< typename ATOMIC_BASIS >
+  void setBasisFunctions(
+    std::vector< ATOMIC_BASIS > const & basisFunctions,
+    bool const storeGradients )
+  {
+    TCSCF_MARK_SCOPE( "QMCGrid::setBasisFunctions" );
+
+    static_assert( std::is_same_v< REAL, typename ATOMIC_BASIS::Real > );
+
+    IndexType const nBasis = basisFunctions.size();
+    basisValues.resize( quadratureGrid.weights.size(), nBasis );
+    if( storeGradients )
+    {
+      basisGradients.resize( quadratureGrid.weights.size(), nBasis );
+    }
+
+    forAll< DefaultPolicy< ParallelHost > >( quadratureGrid.weights.size(),
+      [&] ( IndexType const i )
+      {
+        Cartesian< REAL > r;
+        if constexpr ( NDIM == 2 )
+        {
+          r = { quadratureGrid.points( 0, i ), 0, quadratureGrid.points( 1, i ) };
+        }
+        else
+        {
+          r = { quadratureGrid.points( 0, i ), quadratureGrid.points( 1, i ), quadratureGrid.points( 2, i ) };
+        }
+
+        Spherical< REAL > const rSph = r.toSpherical();
+
+        for( int b = 0; b < nBasis; ++b )
+        {
+          if constexpr ( NDIM == 2 )
+          {
+            basisValues( i, b ) = std::real( basisFunctions[ b ]( rSph ) );
+          }
+          else
+          {
+            basisValues( i, b ) = basisFunctions[ b ]( rSph );
+          }
+
+          if( storeGradients )
+          {
+            basisGradients( i, b ) = basisFunctions[ b ].gradient( rSph );
+          }
+        }
+      }
+    );
+  }
 
   integration::QuadratureGrid< REAL > quadratureGrid{ 0, 0 };
   Array2d< BASIS_VALUE_TYPE > basisValues;

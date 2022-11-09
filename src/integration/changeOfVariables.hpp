@@ -71,6 +71,32 @@ struct Linear
  * 
  */
 template< typename REAL >
+struct Azimuthal
+{
+  using Real = REAL;
+  static constexpr int NDIM = 1;
+
+  /**
+   * 
+   */
+  constexpr CArray< Real, 1 > u( CArray< Real, 1 > const & x ) const
+  {
+    return { std::acos(1 - 2 * x[ 0 ]) };
+  }
+
+  /**
+   * 
+   */
+  constexpr Real jacobian( CArray< Real, 1 > const & x ) const
+  {
+    return LvArray::math::invSqrt( x[ 0 ] * (1 - x[ 0 ]) );
+  }
+};
+
+/**
+ * 
+ */
+template< typename REAL >
 struct XOver1mX
 {
   using Real = REAL;

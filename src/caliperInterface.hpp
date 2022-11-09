@@ -9,6 +9,9 @@
 /// Mark a function or scope for timing with a given name
 #define TCSCF_MARK_SCOPE( name ) cali::Function __cali_ann##__LINE__( STRINGIZE_NX( name ) )
 
+#define TCSCF_MARK_SCOPE_STRING( name ) cali::Function __cali_ann##__LINE__( name )
+
+
 /// Mark a function for timing using a compiler-provided name
 #define TCSCF_MARK_FUNCTION cali::Function __cali_ann##__func__( tcscf::internal::stripPF( __PRETTY_FUNCTION__ ).c_str() )
 

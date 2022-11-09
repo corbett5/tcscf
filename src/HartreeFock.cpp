@@ -183,15 +183,16 @@ void occupiedOrbitalGradients(
  *
  */
 template< typename T, typename SCALAR, typename VECTOR >
-void evaluateR2IntegralSumOverOccupied(
+void Iai(
+  ArraySlice1d< T > const integralValues,
   ArrayView2d< RealType< T > const > const & points,
   ArrayView1d< RealType< T > const > const & weights,
   Cartesian< RealType< T > > const & r1,
+  RealType< T > const r1Weight,
   ArraySlice1d< T const > const & occupiedValuesR1,
+  ArrayView2d< RealType< T > const > const & basisValuesR2,
   ArrayView2d< T const > const & occupiedValuesR2,
-  ArraySlice1d< T > const integralValues,
-  ArrayView2d< RealType< T > const > const & b4Values,
-  ArrayView2d< Cartesian< T > const > const & b4Gradients,
+  ArrayView2d< Cartesian< T > const > const & basisGradientsR2,
   SCALAR const & f,
   VECTOR const & v )
 {
@@ -199,10 +200,10 @@ void evaluateR2IntegralSumOverOccupied(
 
   for( IndexType r2Idx = 0; r2Idx < weights.size(); ++r2Idx )
   {
-    T b2Sum = 0;
-    for( IndexType b2 = 0; b2 < occupiedValuesR1.size( 1 ); ++b2 )
+    T aSum = 0;
+    for( IndexType a = 0; a < occupiedValuesR1.size( 1 ); ++a )
     {
-      b2Sum += occupiedValuesR1[ b2 ] * conj( occupiedValuesR2( r2Idx, b2 ) );
+      aSum += occupiedValuesR1[ a ] * conj( occupiedValuesR2( r2Idx, a ) );
     }
 
     Cartesian< Real > const r2 { points( 0, r2Idx ), 0, points( 1, r2Idx ) };
@@ -210,20 +211,26 @@ void evaluateR2IntegralSumOverOccupied(
 
     if constexpr ( std::is_same_v< VECTOR, std::nullptr_t > )
     {
-      for( IndexType b4 = 0; b4 < integralValues.size(); ++b4 )
+      for( IndexType i = 0; i < integralValues.size(); ++i )
       {
-        integralValues[ b4 ] += b2Sum * scalalPotential * b4Values( r2Idx, b4 );
+        integralValues[ i ] += aSum * scalalPotential * basisValuesR2( r2Idx, i );
       }
     }
     else
     {
       Cartesian< T > const vector = v( r1, r2 );
       
-      for( IndexType b4 = 0; b4 < integralValues.size(); ++b4 )
+      for( IndexType i = 0; i < integralValues.size(); ++i )
       {
-        integralValues[ b4 ] += b2Sum * (scalalPotential * b4Values( r2Idx, b4 ) + weights[ r2Idx ] * dot( vector, b4Gradients( r2Idx, b4 ) ));
+        integralValues[ i ] += aSum * (scalalPotential * basisValuesR2( r2Idx, i ) + weights[ r2Idx ] * dot( vector, basisGradientsR2( r2Idx, i ) ));
       }
     }
+  }
+
+  Real const scale = 2 * pi< Real > * r1Weight;
+  for( auto & value : integralValues )
+  {
+    value *= scale;
   }
 }
 
@@ -231,10 +238,69 @@ void evaluateR2IntegralSumOverOccupied(
  *
  */
 template< typename T, typename SCALAR, typename VECTOR >
-T evaluateR2Integral(
+void Iia(
+  ArraySlice1d< T > const integralValues,
   ArrayView2d< RealType< T > const > const & points,
   ArrayView1d< RealType< T > const > const & weights,
   Cartesian< RealType< T > > const & r1,
+  RealType< T > const r1Weight,
+  ArraySlice1d< T const > const & occupiedValuesR1,
+  ArrayView2d< RealType< T > const > const & basisValuesR2,
+  ArrayView2d< T const > const & occupiedValuesR2,
+  ArrayView2d< Cartesian< T > const > const & occupiedGradientsR2,
+  SCALAR const & f,
+  VECTOR const & v )
+{
+  using Real = RealType< T >;
+
+  for( IndexType r2Idx = 0; r2Idx < weights.size(); ++r2Idx )
+  {
+    T aSum = 0;
+    for( IndexType a = 0; a < occupiedValuesR1.size( 1 ); ++a )
+    {
+      aSum += conj( occupiedValuesR1[ a ] ) * occupiedValuesR2( r2Idx, a );
+    }
+
+    Cartesian< Real > const r2 { points( 0, r2Idx ), 0, points( 1, r2Idx ) };
+    Real integrand = aSum * f( r1, r2 );
+
+    if constexpr ( !std::is_same_v< VECTOR, std::nullptr_t > )
+    {
+      Cartesian< T > gradASum {};
+      
+      for( IndexType a = 0; a < occupiedValuesR1.size( 1 ); ++a )
+      {
+        gradASum += conj( occupiedValuesR1[ a ] ) * occupiedGradientsR2( r2Idx, a );
+      }
+
+      integrand += dot( v( r1, r2 ), gradASum );
+    }
+
+    integrand *= weights[ r2Idx ];
+    
+    for( IndexType i = 0; i < integralValues.size(); ++i )
+    {
+      integralValues[ i ] += basisValuesR2( r2Idx, i ) * integrand;
+    }
+  }
+
+  Real const scale = 2 * pi< Real > * r1Weight;
+  for( auto & value : integralValues )
+  {
+    value *= scale;
+  }
+}
+
+/**
+ *
+ */
+template< typename T, typename SCALAR, typename VECTOR >
+void Iaa(
+  T & result,
+  ArrayView2d< RealType< T > const > const & points,
+  ArrayView1d< RealType< T > const > const & weights,
+  Cartesian< RealType< T > > const & r1,
+  RealType< T > const r1Weight,
   ArrayView2d< T const > const & b2Values,
   ArrayView2d< Cartesian< T > const > const & b2Gradients,
   SCALAR const & f,
@@ -246,7 +312,6 @@ T evaluateR2Integral(
   for( IndexType r2Idx = 0; r2Idx < weights.size(); ++r2Idx )
   {
     Cartesian< Real > const r2 { points( 0, r2Idx ), 0, points( 1, r2Idx ) };
-    auto const scalalPotential = f( r1, r2 );
 
     Real sumOfNorms = 0;
     for( IndexType b2 = 0; b2 < b2Values.size( 1 ); ++b2 )
@@ -254,11 +319,8 @@ T evaluateR2Integral(
       sumOfNorms += std::norm( b2Values( r2Idx, b2 ) );
     }
 
-    if constexpr ( std::is_same_v< VECTOR, std::nullptr_t > )
-    {
-      answer += weights[ r2Idx ] * sumOfNorms * scalalPotential;
-    }
-    else
+    T contribution = sumOfNorms * f( r1, r2 );
+    if constexpr ( !std::is_same_v< VECTOR, std::nullptr_t > )
     {
       Cartesian< T > sumOfGradients {};
       for( IndexType b2 = 0; b2 < b2Values.size( 1 ); ++b2 )
@@ -266,31 +328,46 @@ T evaluateR2Integral(
         sumOfGradients += conj( b2Values( r2Idx, b2 ) ) * std::norm( b2Gradients( r2Idx, b2 ) );
       }
 
-      answer += weights[ r2Idx ] * (sumOfNorms * scalalPotential + dot( v( r1, r2 ), sumOfGradients ));
+      contribution += dot( v( r1, r2 ), sumOfGradients );
     }
+
+    answer += weights[ r2Idx ] * contribution;
   }
 
-  return 2 * pi< Real > * answer;
+  result = 2 * pi< Real > * r1Weight * answer;
 }
 
+static constexpr int IAI = 0;
+static constexpr int IAA = 1;
+static constexpr int IIA = 2;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
-template< typename T, typename SCALAR, typename VECTOR=std::nullptr_t >
-void sumOccupiedAI(
-  ArraySlice2d< T > const & innerIntegralsAI,
+template< int INTEGRAL_TYPE, typename T, int DIM, typename SCALAR, typename VECTOR=std::nullptr_t >
+void computeInnerIntegrals(
+  ArraySlice< T, DIM > const & innerIntegrals,
   integration::QMCGrid< RealType< T >, 3 > const & r1Grid,
   integration::QMCGrid< RealType< T >, 2 > const & r2Grid,
   ArrayView2d< T const > const & r1OccupiedValues,
   ArrayView2d< T const > const & r2OccupiedValues,
+  ArrayView2d< Cartesian< T > const > const r2OccupiedGradients,
   SCALAR && f,
   VECTOR && v={} )
 {
-  TCSCF_MARK_FUNCTION;
+  std::string caliperTag;
+  if( INTEGRAL_TYPE == IAI )
+  {
+    caliperTag = "Computing I^a_i";
+  }
+  if( INTEGRAL_TYPE == IAA )
+  {
+    caliperTag = "Computing I^a_a";
+  }
+
+  TCSCF_MARK_SCOPE_STRING( caliperTag.data() );
 
   using PolicyType = ParallelHost;
   using Real = RealType< T >;
   
-  IndexType const nBasis = r1Grid.nBasis();
-
   ArrayView2d< Real const > const r1Points = r1Grid.quadratureGrid.points.toViewConst();
   ArrayView1d< Real const > const r1Weights = r1Grid.quadratureGrid.weights.toViewConst();
 
@@ -305,62 +382,62 @@ void sumOccupiedAI(
       Cartesian< Real > const r1 = { r1Points( 0, r1Idx ), r1Points( 1, r1Idx ), r1Points( 2, r1Idx ) };
       Real const r1Weight = r1Weights( r1Idx );
 
-      internal::evaluateR2IntegralSumOverOccupied< T >(
-        r2Points,
-        r2Weights,
-        r1,
-        r1OccupiedValues[ r1Idx ],
-        r2OccupiedValues,
-        innerIntegralsAI[ r1Idx ],
-        r2BasisValues,
-        r2BasisGradients,
-        f,
-        v );
-      
-      for( IndexType i = 0; i < nBasis; ++i )
+      if constexpr ( INTEGRAL_TYPE == IAI )
       {
-        innerIntegralsAI( r1Idx, i ) *= 2 * pi< Real > * r1Weight;
+        internal::Iai(
+          innerIntegrals[ r1Idx ],
+          r2Points,
+          r2Weights,
+          r1,
+          r1Weight,
+          r1OccupiedValues[ r1Idx ],
+          r2BasisValues,
+          r2OccupiedValues,
+          r2BasisGradients,
+          f,
+          v );
       }
-    }
-  );
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////
-template< typename T, typename SCALAR, typename VECTOR=std::nullptr_t >
-void sumOccupiedAA(
-  ArraySlice1d< T > const & innerIntegralsAA,
-  integration::QMCGrid< RealType< T >, 3 > const & r1Grid,
-  integration::QMCGrid< RealType< T >, 2 > const & r2Grid,
-  ArrayView2d< T const > const & r2OccupiedValues,
-  ArrayView2d< Cartesian< T > const > const r2OccupiedGradients,
-  SCALAR && f,
-  VECTOR && v={} )
-{
-  TCSCF_MARK_FUNCTION;
-
-  using PolicyType = ParallelHost;
-  using Real = RealType< T >;
-
-  ArrayView2d< Real const > const r1Points = r1Grid.quadratureGrid.points.toViewConst();
-  ArrayView1d< Real const > const r1Weights = r1Grid.quadratureGrid.weights.toViewConst();
-
-  ArrayView2d< Real const > const r2Points = r2Grid.quadratureGrid.points.toViewConst();
-  ArrayView1d< Real const > const r2Weights = r2Grid.quadratureGrid.weights.toViewConst();
-
-  forAll< DefaultPolicy< PolicyType > >( r1Grid.quadratureGrid.points.size( 1 ),
-    [=] ( IndexType const r1Idx )
-    {
-      Cartesian< Real > const r1 = { r1Points( 0, r1Idx ), r1Points( 1, r1Idx ), r1Points( 2, r1Idx ) };
-      Real const r1Weight = r1Weights( r1Idx );
-
-      innerIntegralsAA( r1Idx ) = r1Weight * internal::evaluateR2Integral(
-        r2Points,
-        r2Weights,
-        r1,
-        r2OccupiedValues,
-        r2OccupiedGradients,
-        f,
-        v );
+      if constexpr ( INTEGRAL_TYPE == IIA )
+      {
+        internal::Iia(
+          innerIntegrals[ r1Idx ],
+          r2Points,
+          r2Weights,
+          r1,
+          r1Weight,
+          r1OccupiedValues[ r1Idx ],
+          r2BasisValues,
+          r2OccupiedValues,
+          r2OccupiedGradients,
+          f,
+          v );
+      }
+      if constexpr ( INTEGRAL_TYPE == IAA )
+      {
+        internal::Iaa(
+          innerIntegrals[ r1Idx ],
+          r2Points,
+          r2Weights,
+          r1,
+          r1Weight,
+          r2OccupiedValues,
+          r2OccupiedGradients,
+          f,
+          v );
+      }
+      // if constexpr ( INTEGRAL_TYPE == IAA12 )
+      // {
+      //   internal::Iaa(
+      //     innerIntegrals[ r1Idx ],
+      //     r2Points,
+      //     r2Weights,
+      //     r1,
+      //     r1Weight,
+      //     r2OccupiedValues,
+      //     r2OccupiedGradients,
+      //     f,
+      //     v );
+      // }
     }
   );
 }
@@ -403,28 +480,29 @@ RealType< T > RCSHartreeFock< T >::compute(
 
   Array2d< T > const fockTwoTermsSameSpin( basisSize, basisSize );
 
-  for( int iter = 0; iter < 1000; ++iter )
+  for( _iter = 0; _iter < 50; ++_iter )
   {
     internal::occupiedOrbitalValues( r1OccupiedValues, r1Grid.basisValues.toViewConst(), eigenvectors.toSliceConst() );
     internal::occupiedOrbitalValues( r2OccupiedValues, r2Grid.basisValues.toViewConst(), eigenvectors.toSliceConst() );
 
     innerIntegralsKI.zero();
-    internal::sumOccupiedAI(
+    internal::computeInnerIntegrals< internal::IAI >(
       innerIntegralsKI.toSlice(),
       r1Grid,
       r2Grid,
       r1OccupiedValues.toViewConst(),
       r2OccupiedValues.toViewConst(),
+      {},
       [] (Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
       {
         return 1 / (r1 - r2).r();
       } );
-
-    innerIntegralsKK.zero();
-    internal::sumOccupiedAA(
+    
+    internal::computeInnerIntegrals< internal::IAA >(
       innerIntegralsKK.toSlice(),
       r1Grid,
       r2Grid,
+      r1OccupiedValues.toViewConst(),
       r2OccupiedValues.toViewConst(),
       {},
       [] (Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
@@ -521,7 +599,7 @@ RealType< T > RCSHartreeFock< T >::compute(
 
   Real energy = std::numeric_limits< Real >::max();
 
-  for( int iter = 0; iter < 1000; ++iter )
+  for( _iter = 0; _iter < 50; ++_iter )
   {
     internal::constructFockOperator(
       fockOperator.toSlice(),
@@ -609,7 +687,7 @@ RealType< T > UOSHartreeFock< T >::compute(
   Array3d< T > const innerIntegralsKI( 2, r1Grid.nGrid(), basisSize );
   Array2d< T > const innerIntegralsKK( 2, r1Grid.nGrid() );
 
-  for( int iter = 0; iter < 1000; ++iter )
+  for( _iter = 0; _iter < 50; ++_iter )
   {
     for( int spin = 0; spin < 2; ++spin )
     {
@@ -621,21 +699,23 @@ RealType< T > UOSHartreeFock< T >::compute(
     innerIntegralsKK.zero();
     for( int spin = 0; spin < 2; ++spin )
     {
-      internal::sumOccupiedAI(
+      internal::computeInnerIntegrals< internal::IAI >(
         innerIntegralsKI[ spin ],
         r1Grid,
         r2Grid,
         r1OccupiedValues[ spin ].toViewConst(),
         r2OccupiedValues[ spin ].toViewConst(),
+        {},
         [] (Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
         {
           return 1 / (r1 - r2).r();
         } );
-
-      internal::sumOccupiedAA(
+      
+      internal::computeInnerIntegrals< internal::IAA >(
         innerIntegralsKK[ spin ],
         r1Grid,
         r2Grid,
+        r1OccupiedValues[ spin ].toViewConst(),
         r2OccupiedValues[ spin ].toViewConst(),
         {},
         [] (Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
@@ -745,7 +825,7 @@ RealType< T > UOSHartreeFock< T >::compute(
 
   // TODO: figure out a way to initialize the density in a non-zero manner.
 
-  for( int iter = 0; iter < 1000; ++iter )
+  for( _iter = 0; _iter < 50; ++_iter )
   {
     for( int spin = 0; spin < 2; ++spin )
     {
@@ -841,7 +921,7 @@ RealType< T > TCHartreeFock< T >::compute(
     sortedIndices( 1, i ) = i;
   }
 
-  for( int iter = 0; iter < 1000; ++iter )
+  for( _iter = 0; _iter < 50; ++_iter )
   {
     constructFockOperator( oneElectronTerms, twoElectronTermsSameSpin, twoElectronTermsOppositeSpin );
 

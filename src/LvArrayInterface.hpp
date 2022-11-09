@@ -19,7 +19,7 @@ template< typename T, camp::idx_t N >
 using CArray = LvArray::typeManipulation::CArray< T, N >;
 
 /// A slice of arbitrary dimension.
-template< typename T, int N, int USD >
+template< typename T, int N, int USD = N - 1 >
 using ArraySlice = LvArray::ArraySlice< T, N, USD, IndexType >;
 
 /// A view of arbitrary dimension.

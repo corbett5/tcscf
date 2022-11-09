@@ -98,16 +98,17 @@ public:
   static constexpr int NDIM = NDIM_P;
   using Real = REAL;
   using Integrator = integrators::Qmc< Real, Real, NDIM, integrators::transforms::None::type >;
+  static constexpr int MIN_SHIFTS = 2;
 
   QMCCache( IndexType const minGridSize ):
-    _points( 1, 2 * Integrator {}.get_next_n( minGridSize ) )
+    _points( 1, MIN_SHIFTS * Integrator {}.get_next_n( minGridSize ) )
   {
     TCSCF_MARK_SCOPE( "QMCCache::QMCCache" );
 
     Integrator integrator;
     integrator.maxeval = 1;
     integrator.minn = minGridSize;
-    integrator.minm = 2;
+    integrator.minm = MIN_SHIFTS;
     
     auto functor = internal::createFunctor( [this] ( CArray< Real, NDIM > const & x )
     {
@@ -116,7 +117,7 @@ public:
     } );
 
     auto result = integrator.integrate( functor );
-    LVARRAY_ERROR_IF_GT( result.evaluations, 2 * integrator.get_next_n( minGridSize ) );
+    LVARRAY_ERROR_IF_GT( result.evaluations, MIN_SHIFTS * integrator.get_next_n( minGridSize ) );
   }
 
   constexpr IndexType numPoints() const

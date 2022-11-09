@@ -37,6 +37,16 @@ struct RCSHartreeFock
 
   /**
    */
+  constexpr bool needsGradients() const
+  { return false; }
+
+  /**
+   */
+  int numberOfConvergenceLoops() const
+  { return _iter + 1; }
+
+  /**
+   */
   RealType< T > compute(
     bool const orthogonal,
     ArrayView2d< T const > const & overlap,
@@ -67,6 +77,7 @@ struct RCSHartreeFock
   Array2d< T, RAJA::PERM_JI > const eigenvectors;
 
 private:
+  int _iter = 0;
   LvArray::dense::ArrayWorkspace< T, LvArray::ChaiBuffer > _workspace;
   Array1d< int > _support;
 };
@@ -90,6 +101,16 @@ struct UOSHartreeFock
     _support( 2 * std::max( numSpinUp, numSpinDown ) )
   {}
   
+  /**
+   */
+  constexpr bool needsGradients() const
+  { return false; }
+
+  /**
+   */
+  int numberOfConvergenceLoops() const
+  { return _iter + 1; }
+
   /**
    */
   Real compute(
@@ -122,7 +143,7 @@ struct UOSHartreeFock
   Array3d< T, RAJA::PERM_IKJ > const eigenvectors;
 
 private:
-
+  int _iter = 0;
   LvArray::dense::ArrayWorkspace< T, LvArray::ChaiBuffer > _workspace;
   Array1d< int > _support;
 };
@@ -195,6 +216,7 @@ private:
    */
   void getNewDensity();
 
+  int _iter = 0;
   LvArray::dense::ArrayWorkspace< Complex, LvArray::ChaiBuffer > _workspace;
   Array2d< Complex > const eigenvalues;
   Array3d< Complex, RAJA::PERM_IKJ > const eigenvectors;

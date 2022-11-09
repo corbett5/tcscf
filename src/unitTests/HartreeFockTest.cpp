@@ -466,6 +466,7 @@ void ochiNewHF(
 
   Array1d< Real > energies;
 
+  // TODO: figure out why convergence sucks. Perhaps just pick a single integration grid.
   int const nIter = 30;
   for( int iter = 0; iter < nIter; ++iter )
   {

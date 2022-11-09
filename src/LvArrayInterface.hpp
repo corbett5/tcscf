@@ -55,7 +55,7 @@ template< typename T, typename PERM=RAJA::PERM_IJ >
 using Array2d = Array< T, 2, PERM >;
 
 /// A three dimensional view.
-template< typename T, int USD=1 >
+template< typename T, int USD=2 >
 using ArrayView3d = ArrayView< T, 3, USD >;
 
 /// A three dimensional array.

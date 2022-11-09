@@ -42,7 +42,7 @@ struct RCSHartreeFock
     ArrayView2d< T const > const & overlap,
     ArrayView2d< Real const > const & oneElectronTerms,
     integration::QMCGrid< Real, 3 > const & r1Grid,
-    integration::QMCGrid< Real, 2 > const & r2Grid );
+    integration::QMCGrid< Real, 3 > const & r2Grid );
 
   /**
    */
@@ -97,7 +97,7 @@ struct UOSHartreeFock
     ArrayView2d< T const > const & overlap,
     ArrayView2d< Real const > const & oneElectronTerms,
     integration::QMCGrid< Real, 3 > const & r1Grid,
-    integration::QMCGrid< Real, 2 > const & r2Grid );
+    integration::QMCGrid< Real, 3 > const & r2Grid );
 
   /**
    */

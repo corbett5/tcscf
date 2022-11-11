@@ -10,6 +10,96 @@ namespace tcscf
 
 /**
  */
+template< typename T, typename REAL, typename LAMBDA >
+void precomputeIntegrand(
+  ArrayView2d< T > const & values,
+  integration::QMCGrid< REAL, 3 > const & r1Grid,
+  integration::QMCGrid< REAL, 2 > const & r2Grid,
+  LAMBDA && f )
+{
+  TCSCF_MARK_FUNCTION;
+
+  LVARRAY_ERROR_IF_NE( values.size( 0 ), r1Grid.nGrid() );
+  LVARRAY_ERROR_IF_NE( values.size( 1 ), r2Grid.nGrid() );
+
+  ArrayView2d< REAL const > const r1Points = r1Grid.quadratureGrid.points.toViewConst();
+  ArrayView1d< REAL const > const r1Weights = r1Grid.quadratureGrid.weights.toViewConst();
+
+  ArrayView2d< REAL const > const r2Points = r2Grid.quadratureGrid.points.toViewConst();
+  ArrayView1d< REAL const > const r2Weights = r2Grid.quadratureGrid.weights.toViewConst();
+
+  forAll< DefaultPolicy< Serial > >( r1Points.size( 1 ),
+    [=] ( IndexType const r1Idx )
+    {
+      Cartesian< REAL > const r1 = { r1Points( 0, r1Idx ), r1Points( 1, r1Idx ), r1Points( 2, r1Idx ) };
+      for( IndexType r2Idx = 0; r2Idx < r2Points.size( 1 ); ++r2Idx )
+      {
+        Cartesian< REAL > const r2 { r2Points( 0, r2Idx ), 0, r2Points( 1, r2Idx ) };
+        values( r1Idx, r2Idx ) = f( r2, r1 ) * (r1Weights[ r1Idx ] * r2Weights[ r2Idx ]);
+        
+        // T const diff = f( r2, r1 ) - f( r1, r2 );
+        // if constexpr ( std::is_same_v< T, double > )
+        // {
+        //   LVARRAY_ERROR_IF_GT( std::abs( diff ), 1e-10 );
+        // }
+        // else
+        // {
+        //   LVARRAY_ERROR_IF_GT( std::abs( diff.x() ), 1e-10 );
+        //   LVARRAY_ERROR_IF_GT( std::abs( diff.y() ), 1e-10 );
+        //   LVARRAY_ERROR_IF_GT( std::abs( diff.z() ), 1e-10 );
+        // }
+      }
+    }
+  );
+}
+
+/**
+ */
+template< typename T, typename REAL, typename LAMBDA >
+void precomputeIntegrand(
+  ArrayView2d< T > const & values,
+  integration::QMCGrid< REAL, 2 > const & r1Grid,
+  integration::QMCGrid< REAL, 3 > const & r2Grid,
+  LAMBDA && f )
+{
+  TCSCF_MARK_FUNCTION;
+
+  LVARRAY_ERROR_IF_NE( values.size( 0 ), r1Grid.nGrid() );
+  LVARRAY_ERROR_IF_NE( values.size( 1 ), r2Grid.nGrid() );
+
+  ArrayView2d< REAL const > const r1Points = r1Grid.quadratureGrid.points.toViewConst();
+  ArrayView1d< REAL const > const r1Weights = r1Grid.quadratureGrid.weights.toViewConst();
+
+  ArrayView2d< REAL const > const r2Points = r2Grid.quadratureGrid.points.toViewConst();
+  ArrayView1d< REAL const > const r2Weights = r2Grid.quadratureGrid.weights.toViewConst();
+
+  forAll< DefaultPolicy< Serial > >( r1Points.size( 1 ),
+    [=] ( IndexType const r1Idx )
+    {
+      Cartesian< REAL > const r1 = { r1Points( 0, r1Idx ), 0, r1Points( 1, r1Idx ) };
+      for( IndexType r2Idx = 0; r2Idx < r2Points.size( 1 ); ++r2Idx )
+      {
+        Cartesian< REAL > const r2 { r2Points( 0, r2Idx ), r2Points( 1, r2Idx ), r2Points( 2, r2Idx ) };
+        values( r1Idx, r2Idx ) = f( r2, r1 ) * (r1Weights[ r1Idx ] * r2Weights[ r2Idx ]);
+        
+        // T const diff = f( r2, r1 ) - f( r1, r2 );
+        // if constexpr ( std::is_same_v< T, double > )
+        // {
+        //   LVARRAY_ERROR_IF_GT( std::abs( diff ), 1e-10 );
+        // }
+        // else
+        // {
+        //   LVARRAY_ERROR_IF_GT( std::abs( diff.x() ), 1e-10 );
+        //   LVARRAY_ERROR_IF_GT( std::abs( diff.y() ), 1e-10 );
+        //   LVARRAY_ERROR_IF_GT( std::abs( diff.z() ), 1e-10 );
+        // }
+      }
+    }
+  );
+}
+
+/**
+ */
 template< typename T >
 struct RCSHartreeFock
 {
@@ -52,7 +142,8 @@ struct RCSHartreeFock
     ArrayView2d< T const > const & overlap,
     ArrayView2d< Real const > const & oneElectronTerms,
     integration::QMCGrid< Real, 3 > const & r1Grid,
-    integration::QMCGrid< Real, 2 > const & r2Grid );
+    integration::QMCGrid< Real, 2 > const & r2Grid,
+    ArrayView2d< Real const > const & r12Inv );
 
   /**
    */
@@ -118,7 +209,8 @@ struct UOSHartreeFock
     ArrayView2d< T const > const & overlap,
     ArrayView2d< Real const > const & oneElectronTerms,
     integration::QMCGrid< Real, 3 > const & r1Grid,
-    integration::QMCGrid< Real, 2 > const & r2Grid );
+    integration::QMCGrid< Real, 2 > const & r2Grid,
+    ArrayView2d< Real const > const & r12Inv );
 
   /**
    */
@@ -171,6 +263,33 @@ struct TCHartreeFock
     eigenvectors( 2, numBasisFunctions, numBasisFunctions )
   {}
   
+  /**
+   */
+  constexpr bool needsGradients() const
+  { return true; }
+
+  /**
+   */
+  int numberOfConvergenceLoops() const
+  { return _iter + 1; }
+
+  /**
+   */
+  Real compute(
+    bool const orthogonal,
+    ArrayView2d< T const > const & overlap,
+    ArrayView2d< Real const > const & oneElectronTerms,
+    ArrayView4d< T const > const & twoElectronTermsSameSpin,
+    ArrayView4d< T const > const & twoElectronTermsOppositeSpin,
+    integration::QMCGrid< Real, 3 > const & r1Grid,
+    integration::QMCGrid< Real, 2 > const & r2Grid,
+    ArrayView2d< Real const > const & scalarSame,
+    ArrayView2d< Real const > const & scalarOppo,
+    ArrayView2d< Cartesian< Real > const > const & vectorSame21,
+    ArrayView2d< Cartesian< Real > const > const & vectorOppo21,
+    ArrayView2d< Cartesian< Real > const > const & vectorSame12,
+    ArrayView2d< Cartesian< Real > const > const & vectorOppo12 );
+
   /**
    */
   Real compute(

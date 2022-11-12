@@ -28,7 +28,7 @@ void precomputeIntegrand(
   ArrayView2d< REAL const > const r2Points = r2Grid.quadratureGrid.points.toViewConst();
   ArrayView1d< REAL const > const r2Weights = r2Grid.quadratureGrid.weights.toViewConst();
 
-  forAll< DefaultPolicy< Serial > >( r1Points.size( 1 ),
+  forAll< DefaultPolicy< ParallelHost > >( r1Points.size( 1 ),
     [=] ( IndexType const r1Idx )
     {
       Cartesian< REAL > const r1 = { r1Points( 0, r1Idx ), r1Points( 1, r1Idx ), r1Points( 2, r1Idx ) };
@@ -56,10 +56,10 @@ void precomputeIntegrand(
 /**
  */
 template< typename T, typename REAL, typename LAMBDA >
-void precomputeIntegrand(
+void precomputeIntegrand12(
   ArrayView2d< T > const & values,
-  integration::QMCGrid< REAL, 2 > const & r1Grid,
-  integration::QMCGrid< REAL, 3 > const & r2Grid,
+  integration::QMCGrid< REAL, 3 > const & r1Grid,
+  integration::QMCGrid< REAL, 2 > const & r2Grid,
   LAMBDA && f )
 {
   TCSCF_MARK_FUNCTION;
@@ -73,14 +73,14 @@ void precomputeIntegrand(
   ArrayView2d< REAL const > const r2Points = r2Grid.quadratureGrid.points.toViewConst();
   ArrayView1d< REAL const > const r2Weights = r2Grid.quadratureGrid.weights.toViewConst();
 
-  forAll< DefaultPolicy< Serial > >( r1Points.size( 1 ),
+  forAll< DefaultPolicy< ParallelHost > >( r1Points.size( 1 ),
     [=] ( IndexType const r1Idx )
     {
-      Cartesian< REAL > const r1 = { r1Points( 0, r1Idx ), 0, r1Points( 1, r1Idx ) };
+      Cartesian< REAL > const r1 = { r1Points( 0, r1Idx ), r1Points( 1, r1Idx ), r1Points( 2, r1Idx ) };
       for( IndexType r2Idx = 0; r2Idx < r2Points.size( 1 ); ++r2Idx )
       {
-        Cartesian< REAL > const r2 { r2Points( 0, r2Idx ), r2Points( 1, r2Idx ), r2Points( 2, r2Idx ) };
-        values( r1Idx, r2Idx ) = f( r2, r1 ) * (r1Weights[ r1Idx ] * r2Weights[ r2Idx ]);
+        Cartesian< REAL > const r2 { r2Points( 0, r2Idx ), 0, r2Points( 1, r2Idx ) };
+        values( r1Idx, r2Idx ) = f( r1, r2 ) * (r1Weights[ r1Idx ] * r2Weights[ r2Idx ]);
         
         // T const diff = f( r2, r1 ) - f( r1, r2 );
         // if constexpr ( std::is_same_v< T, double > )

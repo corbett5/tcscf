@@ -554,7 +554,7 @@ void precomputeTranscorrelated(
     }
   );
 
-  precomputeIntegrand( vSame12, r2Grid, r1Grid,
+  precomputeIntegrand12( vSame12, r1Grid, r2Grid,
     [&u] (Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
     {
       // LVARRAY_UNUSED_VARIABLE( u );
@@ -567,7 +567,7 @@ void precomputeTranscorrelated(
     }
   );
 
-  precomputeIntegrand( vOppo12, r2Grid, r1Grid,
+  precomputeIntegrand12( vOppo12, r1Grid, r2Grid,
     [&u] (Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
     {
       // LVARRAY_UNUSED_VARIABLE( u );
@@ -620,8 +620,8 @@ void ochiNewHF(
   Array2d< Cartesian< Real > > vectorSame21( r1Grid.nGrid(), r2Grid.nGrid() );
   Array2d< Cartesian< Real > > vectorOppo21( r1Grid.nGrid(), r2Grid.nGrid() );
 
-  Array2d< Cartesian< Real > > vectorSame12( r2Grid.nGrid(), r1Grid.nGrid() );
-  Array2d< Cartesian< Real > > vectorOppo12( r2Grid.nGrid(), r1Grid.nGrid() );
+  Array2d< Cartesian< Real > > vectorSame12( r1Grid.nGrid(), r2Grid.nGrid() );
+  Array2d< Cartesian< Real > > vectorOppo12( r1Grid.nGrid(), r2Grid.nGrid() );
   
   Real const a = 1.5;
   Real const a12 = a;
@@ -656,10 +656,10 @@ void ochiNewHF(
 
     if constexpr ( hfCalculator.needsGradients() )
     {
-      Array4d< Complex > R = computeR( r1Grid, r2Grid );
+      // Array4d< Complex > R = computeR( r1Grid, r2Grid );
 
-      Array4d< Complex > const GOppo = computeGOppositeSpin( r1Grid, r2Grid, u );
-      Array4d< Complex > const DOppo = computeDOppositeSpin( r1Grid, r2Grid, u );
+      // Array4d< Complex > const GOppo = computeGOppositeSpin( r1Grid, r2Grid, u );
+      // Array4d< Complex > const DOppo = computeDOppositeSpin( r1Grid, r2Grid, u );
 
       // threeElectronIntegrals( r1Grid, r1Grid, u );
 
@@ -669,7 +669,7 @@ void ochiNewHF(
       // Array4d< Complex > const LOppo = computeLOppositeSpin( r1Grid, r2Grid, u );
       // computeH2PrimeXXX( h2PrimeOppo, h2PrimeSame, R, GOppo, LOppo );
 
-      computeH2Prime( h2PrimeOppo, h2PrimeSame, R, GOppo, DOppo );
+      // computeH2Prime( h2PrimeOppo, h2PrimeSame, R, GOppo, DOppo );
 
       LVARRAY_LOG_VAR( hfCalculator.compute( true, {}, coreMatrix, h2PrimeSame, h2PrimeOppo, r1Grid, r2Grid, scalarSame, scalarOppo, vectorSame21, vectorOppo21, vectorSame12, vectorOppo12 ) );
     }

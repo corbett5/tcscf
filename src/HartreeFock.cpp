@@ -1140,8 +1140,6 @@ RealType< T > TCHartreeFock< T >::compute(
         vectorOppo12 );
     }
 
-    constructFockOperator( oneElectronTerms, twoElectronTermsSameSpin, twoElectronTermsOppositeSpin );
-
     for( int spin = 0; spin < 2; ++spin )
     {
       TCSCF_MARK_SCOPE( "Constructing fock operator" );
@@ -1167,17 +1165,20 @@ RealType< T > TCHartreeFock< T >::compute(
             + conj( r1Grid.basisValues( r1Idx, j ) ) * dot( IOppoaa12( spin, r1Idx ).second, r1Grid.basisGradients( r1Idx, i ) );
           }
 
-          T const value = oneElectronTerms( j, i ) + twoElectronContribution / 2;
-          T const diff = fockOperator( spin, j, i ) - value;
-          LVARRAY_ERROR_IF_GT_MSG( std::abs( diff.real() ), 1e-4, fockOperator( spin, j, i ) );
-          LVARRAY_ERROR_IF_GT_MSG( std::abs( diff.imag() ), 1e-4, fockOperator( spin, j, i ) );
-
           fockOperator( spin, j, i ) = oneElectronTerms( j, i ) + twoElectronContribution / 2;
         }
       );
     }
 
-    Real const newEnergy = calculateEnergy( oneElectronTerms, twoElectronTermsSameSpin, twoElectronTermsOppositeSpin ).real();
+    Real const newEnergy = internal::calculateEnergy(
+      fockOperator[ 0 ].toSliceConst(),
+      fockOperator[ 1 ].toSliceConst(),
+      density[ 0 ].toSliceConst(),
+      density[ 1 ].toSliceConst(),
+      oneElectronTerms.toSliceConst() ).real();
+
+    // TODO: Push the energy calculation into the above
+    // Real const newEnergy = calculateEnergy( oneElectronTerms, twoElectronTermsSameSpin, twoElectronTermsOppositeSpin ).real();
 
     if( std::abs( (newEnergy - energy) / energy ) < 10 * std::numeric_limits< Real >::epsilon() )
     {

@@ -248,7 +248,8 @@ struct Cartesian
     return { scale * _x, scale * _y, scale * _z };
   }
 
-  constexpr void scaledAdd( REAL const alpha, Cartesian const other )
+  template< typename U >
+  constexpr void scaledAdd( REAL const alpha, Cartesian< U > const & other )
   {
     _x = _x + alpha * other._x;
     _y = _y + alpha * other._y;

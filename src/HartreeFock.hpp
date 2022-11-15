@@ -35,7 +35,7 @@ void precomputeIntegrand(
       for( IndexType r2Idx = 0; r2Idx < r2Points.size( 1 ); ++r2Idx )
       {
         Cartesian< REAL > const r2 { r2Points( 0, r2Idx ), 0, r2Points( 1, r2Idx ) };
-        values( r1Idx, r2Idx ) = f( r2, r1 ) * (r1Weights[ r1Idx ] * r2Weights[ r2Idx ]);
+        values( r1Idx, r2Idx ) = f( r1, r2 ) * (r1Weights[ r1Idx ] * r2Weights[ r2Idx ]);
         
         // T const diff = f( r2, r1 ) - f( r1, r2 );
         // if constexpr ( std::is_same_v< T, double > )
@@ -56,10 +56,10 @@ void precomputeIntegrand(
 /**
  */
 template< typename T, typename REAL, typename LAMBDA >
-void precomputeIntegrand12(
+void precomputeIntegrand(
   ArrayView2d< T > const & values,
   integration::QMCGrid< REAL, 3 > const & r1Grid,
-  integration::QMCGrid< REAL, 2 > const & r2Grid,
+  integration::QMCGrid< REAL, 3 > const & r2Grid,
   LAMBDA && f )
 {
   TCSCF_MARK_FUNCTION;
@@ -79,23 +79,67 @@ void precomputeIntegrand12(
       Cartesian< REAL > const r1 = { r1Points( 0, r1Idx ), r1Points( 1, r1Idx ), r1Points( 2, r1Idx ) };
       for( IndexType r2Idx = 0; r2Idx < r2Points.size( 1 ); ++r2Idx )
       {
-        Cartesian< REAL > const r2 { r2Points( 0, r2Idx ), 0, r2Points( 1, r2Idx ) };
+        Cartesian< REAL > const r2 { r2Points( 0, r2Idx ), r2Points( 1, r2Idx ), r2Points( 2, r2Idx ) };
         values( r1Idx, r2Idx ) = f( r1, r2 ) * (r1Weights[ r1Idx ] * r2Weights[ r2Idx ]);
-        
-        // T const diff = f( r2, r1 ) - f( r1, r2 );
-        // if constexpr ( std::is_same_v< T, double > )
-        // {
-        //   LVARRAY_ERROR_IF_GT( std::abs( diff ), 1e-10 );
-        // }
-        // else
-        // {
-        //   LVARRAY_ERROR_IF_GT( std::abs( diff.x() ), 1e-10 );
-        //   LVARRAY_ERROR_IF_GT( std::abs( diff.y() ), 1e-10 );
-        //   LVARRAY_ERROR_IF_GT( std::abs( diff.z() ), 1e-10 );
-        // }
       }
     }
   );
+}
+
+
+/**
+ * 
+ */
+template< typename REAL >
+Array3d< Cartesian< std::complex< REAL > > > computeV(
+  integration::QMCGrid< REAL, 3 > const & r1Grid,
+  integration::QMCGrid< REAL, 3 > const & r2Grid,
+  ArrayView2d< Cartesian< REAL > const > const & vectorFunction )
+{
+  TCSCF_MARK_FUNCTION;
+
+  using PolicyType = ParallelHost;
+  using Real = REAL;
+  using Complex = std::complex< Real >;
+
+  LVARRAY_ERROR_IF_NE( r1Grid.nBasis(), r2Grid.nBasis() );
+
+  IndexType const nBasis = r1Grid.nBasis();
+
+  ArrayView2d< Complex const > const r1BasisValues = r1Grid.basisValues.toViewConst();
+
+  ArrayView2d< Complex const > const r2BasisValues = r2Grid.basisValues.toViewConst();
+
+
+  IndexType const nGridR1 = r1Grid.nGrid();
+  IndexType const nGridR2 = r2Grid.nGrid();
+  Array3d< Cartesian< Complex > > V( nGridR1, nBasis, nBasis );
+
+  {
+    TCSCF_MARK_SCOPE("Computing V");
+
+    forAll< DefaultPolicy< PolicyType > >( nGridR1,
+      [=, V=V.toView()] ( IndexType const r1Idx )
+      {
+        for( IndexType j = 0; j < nBasis; ++j )
+        {
+          for( IndexType i = 0; i < nBasis; ++i )
+          {
+            Cartesian< Complex > answer {};
+            for( IndexType r2Idx = 0; r2Idx < nGridR2; ++r2Idx )
+            {
+              Complex const scale = conj( r1BasisValues( r2Idx, j ) ) * r2BasisValues( r2Idx, i );
+              answer.scaledAdd( scale, vectorFunction( r1Idx, r2Idx ) );
+            }
+
+            V( r1Idx, j, i ) = answer;
+          }
+        }
+      }
+    );
+  }
+
+  return V;
 }
 
 /**
@@ -285,10 +329,8 @@ struct TCHartreeFock
     integration::QMCGrid< Real, 2 > const & r2Grid,
     ArrayView2d< Real const > const & scalarSame,
     ArrayView2d< Real const > const & scalarOppo,
-    ArrayView2d< Cartesian< Real > const > const & vectorSame21,
-    ArrayView2d< Cartesian< Real > const > const & vectorOppo21,
-    ArrayView2d< Cartesian< Real > const > const & vectorSame12,
-    ArrayView2d< Cartesian< Real > const > const & vectorOppo12 );
+    ArrayView3d< Cartesian< T > const > const & VjiSame,
+    ArrayView3d< Cartesian< T > const > const & VjiOppo );
 
   /**
    */

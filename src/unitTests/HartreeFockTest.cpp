@@ -502,83 +502,54 @@ template< typename REAL >
 void precomputeTranscorrelated(
   ArrayView2d< REAL > const & fSame,
   ArrayView2d< REAL > const & fOppo,
-  ArrayView2d< Cartesian< REAL > > const & vSame21,
-  ArrayView2d< Cartesian< REAL > > const & vOppo21,
-  ArrayView2d< Cartesian< REAL > > const & vSame12,
-  ArrayView2d< Cartesian< REAL > > const & vOppo12,
+  Array3d< Cartesian< std::complex< REAL > > > & VjiSame,
+  Array3d< Cartesian< std::complex< REAL > > > & VjiOppo,
   jastrowFunctions::Ochi< REAL > const & u,
   integration::QMCGrid< REAL, 3 > const & r1Grid,
-  integration::QMCGrid< REAL, 2 > const & r2Grid )
+  integration::QMCGrid< REAL, 2 > const & r2Grid,
+  integration::QMCGrid< REAL, 3 > const & r3Grid )
 {
   using Real = REAL;
 
   precomputeIntegrand( fSame, r1Grid, r2Grid,
-    [&u] (Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
+    [&u] ( Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
     {
-      Cartesian< Real > const grad = u.gradient( r1, r2, true );
-      return 1 / (r1 - r2).r() + u.laplacian( r1, r2, true ) - dot( grad, grad );
+      Cartesian< Real > const grad12 = u.gradient( r1, r2, true );
+      Cartesian< Real > const grad21 = u.gradient( r2, r1, true );
+      return 2 / (r1 - r2).r() - dot( grad12, grad12 ) - dot( grad21, grad21 );
     }
   );
 
   precomputeIntegrand( fOppo, r1Grid, r2Grid,
-    [&u] (Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
+    [&u] ( Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
     {
-      Cartesian< Real > const grad = u.gradient( r1, r2, false );
-      return 1 / (r1 - r2).r() + u.laplacian( r1, r2, false ) - dot( grad, grad );
+      Cartesian< Real > const grad12 = u.gradient( r1, r2, false );
+      Cartesian< Real > const grad21 = u.gradient( r2, r1, false );
+      return 2 / (r1 - r2).r() - dot( grad12, grad12 ) - dot( grad21, grad21 );
     }
   );
 
-  precomputeIntegrand( vSame21, r1Grid, r2Grid,
-    [&u] (Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
-    {
-      // LVARRAY_UNUSED_VARIABLE( u );
-      // LVARRAY_UNUSED_VARIABLE( r1 );
-      // LVARRAY_UNUSED_VARIABLE( r2 );
-      // return Cartesian< Real > {};
+  Array2d< Cartesian< Real > > vectorIntegrand( r1Grid.nGrid(), r3Grid.nGrid() );
 
+  precomputeIntegrand( vectorIntegrand, r1Grid, r3Grid,
+    [&u] ( Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
+    {
       auto const grad = u.gradient( r1, r2, true );
-      return grad + grad;
+      return grad;
     }
   );
 
-  precomputeIntegrand( vOppo21, r1Grid, r2Grid,
-    [&u] (Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
-    {
-      // LVARRAY_UNUSED_VARIABLE( u );
-      // LVARRAY_UNUSED_VARIABLE( r1 );
-      // LVARRAY_UNUSED_VARIABLE( r2 );
-      // return Cartesian< Real > {};
+  VjiSame = computeV( r1Grid, r3Grid, vectorIntegrand.toViewConst() );
 
+  precomputeIntegrand( vectorIntegrand, r1Grid, r3Grid,
+    [&u] ( Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
+    {
       auto const grad = u.gradient( r1, r2, false );
-      return grad + grad;
+      return grad;
     }
   );
 
-  precomputeIntegrand12( vSame12, r1Grid, r2Grid,
-    [&u] (Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
-    {
-      // LVARRAY_UNUSED_VARIABLE( u );
-      // LVARRAY_UNUSED_VARIABLE( r1 );
-      // LVARRAY_UNUSED_VARIABLE( r2 );
-      // return Cartesian< Real > {};
-
-      auto const grad = u.gradient( r1, r2, true );
-      return grad + grad;
-    }
-  );
-
-  precomputeIntegrand12( vOppo12, r1Grid, r2Grid,
-    [&u] (Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
-    {
-      // LVARRAY_UNUSED_VARIABLE( u );
-      // LVARRAY_UNUSED_VARIABLE( r1 );
-      // LVARRAY_UNUSED_VARIABLE( r2 );
-      // return Cartesian< Real > {};
-
-      auto const grad = u.gradient( r1, r2, false );
-      return grad + grad;
-    }
-  );
+  VjiOppo = computeV( r1Grid, r3Grid, vectorIntegrand.toViewConst() );
 }
 
 
@@ -611,17 +582,17 @@ void ochiNewHF(
 
   integration::QMCGrid< Real, 3 > r1Grid( r1GridSize );
   r1Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
+
+  integration::QMCGrid< Real, 3 > r3Grid( r1GridSize );
+  r3Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
   
   integration::QMCGrid< Real, 2 > r2Grid( r2GridSize );
   r2Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
 
   Array2d< Real > scalarSame( r1Grid.nGrid(), r2Grid.nGrid() );
   Array2d< Real > scalarOppo( r1Grid.nGrid(), r2Grid.nGrid() );
-  Array2d< Cartesian< Real > > vectorSame21( r1Grid.nGrid(), r2Grid.nGrid() );
-  Array2d< Cartesian< Real > > vectorOppo21( r1Grid.nGrid(), r2Grid.nGrid() );
-
-  Array2d< Cartesian< Real > > vectorSame12( r1Grid.nGrid(), r2Grid.nGrid() );
-  Array2d< Cartesian< Real > > vectorOppo12( r1Grid.nGrid(), r2Grid.nGrid() );
+  Array3d< Cartesian< Complex > > VjiSame( r1Grid.nGrid(), nBasis, nBasis );
+  Array3d< Cartesian< Complex > > VjiOppo( r1Grid.nGrid(), nBasis, nBasis );
   
   Real const a = 1.5;
   Real const a12 = a;
@@ -636,7 +607,7 @@ void ochiNewHF(
 
   if constexpr ( hfCalculator.needsGradients() )
   {
-    precomputeTranscorrelated( scalarSame, scalarOppo, vectorSame21, vectorOppo21, vectorSame12, vectorOppo12, u, r1Grid, r2Grid );
+    precomputeTranscorrelated( scalarSame, scalarOppo, VjiSame, VjiOppo, u, r1Grid, r2Grid, r3Grid );
   }
   else
   {
@@ -656,22 +627,15 @@ void ochiNewHF(
 
     if constexpr ( hfCalculator.needsGradients() )
     {
-      // Array4d< Complex > R = computeR( r1Grid, r2Grid );
-
-      // Array4d< Complex > const GOppo = computeGOppositeSpin( r1Grid, r2Grid, u );
-      // Array4d< Complex > const DOppo = computeDOppositeSpin( r1Grid, r2Grid, u );
-
-      // threeElectronIntegrals( r1Grid, r1Grid, u );
-
       Array4d< Complex > const h2PrimeOppo( nBasis, nBasis, nBasis, nBasis );
       Array4d< Complex > const h2PrimeSame( nBasis, nBasis, nBasis, nBasis );
 
-      // Array4d< Complex > const LOppo = computeLOppositeSpin( r1Grid, r2Grid, u );
-      // computeH2PrimeXXX( h2PrimeOppo, h2PrimeSame, R, GOppo, LOppo );
-
+      // Array4d< Complex > R = computeR( r1Grid, r2Grid );
+      // Array4d< Complex > const GOppo = computeGOppositeSpin( r1Grid, r2Grid, u );
+      // Array4d< Complex > const DOppo = computeDOppositeSpin( r1Grid, r2Grid, u );
       // computeH2Prime( h2PrimeOppo, h2PrimeSame, R, GOppo, DOppo );
 
-      LVARRAY_LOG_VAR( hfCalculator.compute( true, {}, coreMatrix, h2PrimeSame, h2PrimeOppo, r1Grid, r2Grid, scalarSame, scalarOppo, vectorSame21, vectorOppo21, vectorSame12, vectorOppo12 ) );
+      LVARRAY_LOG_VAR( hfCalculator.compute( true, {}, coreMatrix, h2PrimeSame, h2PrimeOppo, r1Grid, r2Grid, scalarSame, scalarOppo, VjiSame, VjiOppo ) );
     }
     else
     {

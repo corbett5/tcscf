@@ -125,20 +125,22 @@ void occupiedOrbitalValues(
   LVARRAY_ERROR_IF_NE( eigenvectors.size( 1 ), nElectrons );
 
   // TODO: replace with matrix vector.
-  for( IndexType r1Idx = 0; r1Idx < gridSize; ++r1Idx )
-  {
-    for( IndexType i = 0; i < nElectrons; ++i )
+  forAll< DefaultPolicy< ParallelHost > >( gridSize,
+    [=] ( IndexType const r1Idx )
     {
-      ResultType value = 0;
-      
-      for( IndexType j = 0; j < nBasis; ++j )
+      for( IndexType i = 0; i < nElectrons; ++i )
       {
-        value += basisValues( r1Idx, j ) * eigenvectors( j, i );
-      }
+        ResultType value = 0;
+        
+        for( IndexType j = 0; j < nBasis; ++j )
+        {
+          value += basisValues( r1Idx, j ) * eigenvectors( j, i );
+        }
 
-      occupiedValues( r1Idx, i ) = value;
+        occupiedValues( r1Idx, i ) = value;
+      }
     }
-  }
+  );
 }
 
 /**
@@ -163,20 +165,154 @@ void occupiedOrbitalGradients(
   LVARRAY_ERROR_IF_NE( eigenvectors.size( 1 ), nElectrons );
 
   // TODO: replace with matrix vector.
-  for( IndexType r1Idx = 0; r1Idx < gridSize; ++r1Idx )
-  {
-    for( IndexType i = 0; i < nElectrons; ++i )
+  forAll< DefaultPolicy< ParallelHost > >( gridSize,
+    [=] ( IndexType const r1Idx )
     {
-      Cartesian< ResultType > grad {};
-      
+      for( IndexType i = 0; i < nElectrons; ++i )
+      {
+        Cartesian< ResultType > grad {};
+        
+        for( IndexType j = 0; j < nBasis; ++j )
+        {
+          grad.scaledAdd( eigenvectors( j, i ), basisGradients( r1Idx, j ) );
+        }
+
+        occupiedGradients( r1Idx, i ) = grad;
+      }
+    }
+  );
+}
+
+template< typename T >
+void calculateVaa(
+  ArraySlice1d< Cartesian< T > > const & Vaa,
+  ArrayView3d< Cartesian< T > const > const & Vji,
+  ArraySlice2d< T const > const & density )
+{
+  TCSCF_MARK_SCOPE( "calculateVaa" );
+  
+  IndexType const nGridR1 = Vaa.size();
+  IndexType const nBasis = Vji.size( 1 );
+
+  LVARRAY_ERROR_IF_NE( Vaa.size(), nGridR1 );
+
+  LVARRAY_ERROR_IF_NE( Vji.size( 0 ), nGridR1 );
+  LVARRAY_ERROR_IF_NE( Vji.size( 1 ), nBasis );
+  LVARRAY_ERROR_IF_NE( Vji.size( 2 ), nBasis );
+
+  LVARRAY_ERROR_IF_NE( density.size( 0 ), nBasis );
+  LVARRAY_ERROR_IF_NE( density.size( 1 ), nBasis );
+
+
+  forAll< DefaultPolicy< ParallelHost > >( nGridR1,
+    [=] ( IndexType const r1Idx )
+    {
+      Cartesian< T > result {};
       for( IndexType j = 0; j < nBasis; ++j )
       {
-        grad.scaledAdd( eigenvectors( j, i ), basisGradients( r1Idx, j ) );
+        for( IndexType i = 0; i < nBasis; ++i )
+        {
+          result.scaledAdd( density( i, j ), Vji( r1Idx, j, i ) );
+        }
       }
 
-      occupiedGradients( r1Idx, i ) = grad;
+      Vaa[ r1Idx ] = result;
     }
-  }
+  );
+}
+
+template< typename T >
+void calculateVai(
+  ArraySlice2d< T > const & Vai,
+  ArrayView3d< Cartesian< T > const > const & Vji,
+  ArrayView2d< T const, 0 > const & C,
+  ArrayView2d< Cartesian< T > const > const & r1OccupiedGradients )
+{
+  TCSCF_MARK_SCOPE( "calculateVai" );
+
+  IndexType const nGridR1 = Vai.size( 0 );
+  IndexType const nBasis = Vai.size( 1 );
+
+  IndexType const nOccupied = C.size( 1 );
+
+  LVARRAY_ERROR_IF_NE( Vai.size( 0 ), nGridR1 );
+  LVARRAY_ERROR_IF_NE( Vai.size( 1 ), nBasis );
+
+  LVARRAY_ERROR_IF_NE( Vji.size( 0 ), nGridR1 );
+  LVARRAY_ERROR_IF_NE( Vji.size( 1 ), nBasis );
+  LVARRAY_ERROR_IF_NE( Vji.size( 2 ), nBasis );
+
+  LVARRAY_ERROR_IF_NE( C.size( 0 ), nBasis );
+  LVARRAY_ERROR_IF_NE( C.size( 1 ), nOccupied );
+
+  LVARRAY_ERROR_IF_NE( r1OccupiedGradients.size( 0 ), nGridR1 );
+  LVARRAY_ERROR_IF_NE( r1OccupiedGradients.size( 1 ), nOccupied );
+
+  forAll< DefaultPolicy< ParallelHost > >( nGridR1,
+    [=] ( IndexType const r1Idx )
+    {
+      for( IndexType j = 0; j < nBasis; ++j )
+      {
+        Cartesian< T > aSum {};
+        for( IndexType a = 0; a < nOccupied; ++a )
+        {
+          aSum.scaledAdd( conj( C( j, a ) ), r1OccupiedGradients( r1Idx, a ) );
+        }
+
+        for( IndexType i = 0; i < nBasis; ++i )
+        {
+          Vai( r1Idx, i ) += dot( Vji( r1Idx, j, i ), aSum );
+        }
+      }
+    }
+  );
+}
+
+template< typename T >
+void calculateVja(
+  ArraySlice2d< Cartesian< T > > const & Vja,
+  ArrayView3d< Cartesian< T > const > const & Vji,
+  ArrayView2d< T const, 0 > const & C,
+  ArrayView2d< T const > const & r1OccupiedValues )
+{
+  TCSCF_MARK_SCOPE( "calculateVja" );
+
+  IndexType const nGridR1 = Vja.size( 0 );
+  IndexType const nBasis = Vja.size( 1 );
+
+  IndexType const nOccupied = C.size( 1 );
+
+  LVARRAY_ERROR_IF_NE( Vja.size( 0 ), nGridR1 );
+  LVARRAY_ERROR_IF_NE( Vja.size( 1 ), nBasis );
+
+  LVARRAY_ERROR_IF_NE( Vji.size( 0 ), nGridR1 );
+  LVARRAY_ERROR_IF_NE( Vji.size( 1 ), nBasis );
+  LVARRAY_ERROR_IF_NE( Vji.size( 2 ), nBasis );
+
+  LVARRAY_ERROR_IF_NE( C.size( 0 ), nBasis );
+  LVARRAY_ERROR_IF_NE( C.size( 1 ), nOccupied );
+
+  LVARRAY_ERROR_IF_NE( r1OccupiedValues.size( 0 ), nGridR1 );
+  LVARRAY_ERROR_IF_NE( r1OccupiedValues.size( 1 ), nOccupied );
+
+  forAll< DefaultPolicy< ParallelHost > >( nGridR1,
+    [=] ( IndexType const r1Idx )
+    {
+      for( IndexType i = 0; i < nBasis; ++i )
+      {
+        T aSum = 0;
+        for( IndexType a = 0; a < nOccupied; ++a )
+        {
+          aSum += C( i, a ) * conj( r1OccupiedValues( r1Idx, a ) );
+        }
+
+        for( IndexType j = 0; j < nBasis; ++j )
+        {
+          Vja( r1Idx, j ).scaledAdd( aSum, Vji( r1Idx, j, i ) );
+        }
+      }
+    }
+  );
 }
 
 /**
@@ -241,38 +377,27 @@ void ja(
   ArraySlice1d< T > const integralValues,
   ArraySlice1d< T const > const & occupiedValuesR1,
   ArrayView2d< RealType< T > const > const & basisValuesR2,
-  ArrayView2d< T const > const & occupiedValuesR2,
   ArrayView2d< Cartesian< T > const > const & occupiedGradientsR2,
-  ArraySlice1d< RealType< T > const > const & scalarFunction,
   ArraySlice1d< Cartesian< RealType< T > > const > const & vectorFunction )
 {
+  // TODO: get rid of USE_VECTOR
+  static_assert( USE_VECTOR );
+
   using Real = RealType< T >;
 
-  IndexType const nGridR2 = scalarFunction.size();
+  IndexType const nGridR2 = vectorFunction.size();
   IndexType const nOccupied = occupiedValuesR1.size();
   IndexType const nBasis = integralValues.size();
 
   for( IndexType r2Idx = 0; r2Idx < nGridR2; ++r2Idx )
   {
-    T aSum = 0;
+    Cartesian< T > gradASum {};
     for( IndexType a = 0; a < nOccupied; ++a )
     {
-      aSum += conj( occupiedValuesR1[ a ] ) * occupiedValuesR2( r2Idx, a );
+      gradASum.scaledAdd( conj( occupiedValuesR1[ a ] ), occupiedGradientsR2( r2Idx, a ) );
     }
 
-    T integrand = aSum * scalarFunction[ r2Idx ];
-
-    if constexpr ( USE_VECTOR )
-    {
-      Cartesian< T > gradASum {};
-      
-      for( IndexType a = 0; a < nOccupied; ++a )
-      {
-        gradASum.scaledAdd( conj( occupiedValuesR1[ a ] ), occupiedGradientsR2( r2Idx, a ) );
-      }
-
-      integrand += dot( vectorFunction[ r2Idx ], gradASum );
-    }
+    T const integrand = dot( vectorFunction[ r2Idx ], gradASum );
     
     for( IndexType j = 0; j < nBasis; ++j )
     {
@@ -335,17 +460,18 @@ void aa(
  */
 template< bool USE_VECTOR, typename T >
 void aa12(
-  std::pair< T, Cartesian< T > > & result,
+  Cartesian< T > & result,
   ArrayView2d< T const > const & occupiedValuesR2,
-  ArraySlice1d< RealType< T > const > const & scalarFunction,
   ArraySlice1d< Cartesian< RealType< T > > const > const & vectorFunction )
 {
+  // TODO: Remove this template parameter.
+  static_assert( USE_VECTOR );
+
   using Real = RealType< T >;
 
-  IndexType const nGridR2 = scalarFunction.size();
+  IndexType const nGridR2 = vectorFunction.size();
   IndexType const nOccupied = occupiedValuesR2.size( 1 );
 
-  T scalarIntegral {};
   Cartesian< Real > vectorIntegral {};
   for( IndexType r2Idx = 0; r2Idx < nGridR2; ++r2Idx )
   {
@@ -355,19 +481,12 @@ void aa12(
       sumOfNorms += std::norm( occupiedValuesR2( r2Idx, a ) );
     }
 
-    // TODO This should be f( r1, r2 ) not f( r2, r1 )
-    scalarIntegral += sumOfNorms * scalarFunction[ r2Idx ];
-
-    if constexpr ( USE_VECTOR )
-    {
-      vectorIntegral.scaledAdd( sumOfNorms, vectorFunction[ r2Idx ] );
-    }
+    vectorIntegral.scaledAdd( sumOfNorms, vectorFunction[ r2Idx ] );
   }
 
-  result.first = 2 * pi< Real > * scalarIntegral;
-  result.second = { 2 * pi< Real > * vectorIntegral.x(),
-                    2 * pi< Real > * vectorIntegral.y(),
-                    2 * pi< Real > * vectorIntegral.z() };
+  result = { 2 * pi< Real > * vectorIntegral.x(),
+             2 * pi< Real > * vectorIntegral.y(),
+             2 * pi< Real > * vectorIntegral.z() };
 }
 
 static constexpr int AI = 0;
@@ -433,9 +552,7 @@ void computeInnerIntegrals(
           innerIntegrals[ r1Idx ],
           r1OccupiedValues[ r1Idx ],
           r2BasisValues,
-          r2OccupiedValues,
           r2OccupiedGradients,
-          scalarFunction[ r1Idx ],
           vectorFunction[ r1Idx ] );
       }
       if constexpr ( INTEGRAL_TYPE == AA )
@@ -452,7 +569,6 @@ void computeInnerIntegrals(
         internal::aa12< USE_VECTOR >(
           innerIntegrals[ r1Idx ],
           r2OccupiedValues,
-          scalarFunction[ r1Idx ],
           vectorFunction[ r1Idx ] );
       }
     }
@@ -1007,10 +1123,8 @@ RealType< T > TCHartreeFock< T >::compute(
   integration::QMCGrid< Real, 2 > const & r2Grid,
   ArrayView2d< Real const > const & scalarSame,
   ArrayView2d< Real const > const & scalarOppo,
-  ArrayView2d< Cartesian< Real > const > const & vectorSame21,
-  ArrayView2d< Cartesian< Real > const > const & vectorOppo21,
-  ArrayView2d< Cartesian< Real > const > const & vectorSame12,
-  ArrayView2d< Cartesian< Real > const > const & vectorOppo12 )
+  ArrayView3d< Cartesian< T > const > const & VjiSame,
+  ArrayView3d< Cartesian< T > const > const & VjiOppo )
 {
   TCSCF_MARK_FUNCTION;
 
@@ -1051,95 +1165,73 @@ RealType< T > TCHartreeFock< T >::compute(
   Array2d< T > const r2OccupiedValues[ 2 ]{ Array2d< T >( r2Grid.nGrid(), nElectrons[ 0 ] ),
                                             Array2d< T >( r2Grid.nGrid(), nElectrons[ 1 ] ) };
 
-  Array2d< Cartesian< T > > const r2OccupiedGradients[ 2 ]{ Array2d< Cartesian< T > >( r2Grid.nGrid(), nElectrons[ 0 ] ),
-                                                            Array2d< Cartesian< T > >( r2Grid.nGrid(), nElectrons[ 1 ] ) };
+  Array2d< Cartesian< T > > const r1OccupiedGradients[ 2 ]{ Array2d< Cartesian< T > >( r1Grid.nGrid(), nElectrons[ 0 ] ),
+                                                            Array2d< Cartesian< T > >( r1Grid.nGrid(), nElectrons[ 1 ] ) };
 
   Array2d< T > const Iaa( 2, r1Grid.nGrid() );
   Array3d< T > const Iai( 2, r1Grid.nGrid(), basisSize );
-  Array2d< std::pair< T, Cartesian< T > > > const Iaa12( 2, r1Grid.nGrid() );
-  Array3d< T > const Ija( 2, r1Grid.nGrid(), basisSize );
-
   Array2d< T > const IOppoaa( 2, r1Grid.nGrid() );
-  Array2d< std::pair< T, Cartesian< T > > > const IOppoaa12( 2, r1Grid.nGrid() );
+
+  Array2d< Cartesian< T > > const VaaSame( 2, r1Grid.nGrid() );
+  Array2d< Cartesian< T > > const VaaOppo( 2, r1Grid.nGrid() );
+
+  Array3d< T > const Vai( 2, r1Grid.nGrid(), basisSize );
+  Array3d< Cartesian< T > > const Vja( 2, r1Grid.nGrid(), basisSize );
 
   for( _iter = 0; _iter < 100; ++_iter )
   {
+    Vai.zero();
+    Vja.zero();
+    Iaa.zero();
+    Iai.zero();
+    IOppoaa.zero();
+
     for( int spin = 0; spin < 2; ++spin )
     {
       internal::occupiedOrbitalValues( r1OccupiedValues[ spin ].toView(), r1Grid.basisValues.toViewConst(), occupiedOrbitals[ spin ].toSliceConst() );
       internal::occupiedOrbitalValues( r2OccupiedValues[ spin ].toView(), r2Grid.basisValues.toViewConst(), occupiedOrbitals[ spin ].toSliceConst() );
-      internal::occupiedOrbitalGradients( r2OccupiedGradients[ spin ].toView(), r2Grid.basisGradients.toViewConst(), occupiedOrbitals[ spin ].toSliceConst() );
-    }
+      internal::occupiedOrbitalGradients( r1OccupiedGradients[ spin ].toView(), r1Grid.basisGradients.toViewConst(), occupiedOrbitals[ spin ].toSliceConst() );
+    
+      internal::calculateVaa( VaaSame[ spin ], VjiSame, density[ spin ].toSliceConst() );
+      internal::calculateVaa( VaaOppo[ spin ], VjiOppo, density[ spin ].toSliceConst() );
 
-    Iaa.zero();
-    Iai.zero();
-    Iaa12.zero();
-    Ija.zero();
-    IOppoaa.zero();
-    IOppoaa12.zero();
-    for( int spin = 0; spin < 2; ++spin )
-    {
-      internal::computeInnerIntegrals< internal::AA, true >(
+      internal::calculateVai( Vai[ spin ], VjiSame, occupiedOrbitals[ spin ].toViewConst(), r1OccupiedGradients[ spin ].toViewConst() );
+      internal::calculateVja( Vja[ spin ], VjiSame, occupiedOrbitals[ spin ].toViewConst(), r1OccupiedValues[ spin ].toViewConst() );
+
+      internal::computeInnerIntegrals< internal::AA, false >(
         Iaa[ spin ],
         r1Grid,
         r2Grid,
         r1OccupiedValues[ spin ].toViewConst(),
         r2OccupiedValues[ spin ].toViewConst(),
-        r2OccupiedGradients[ spin ].toViewConst(),
+        {},
         scalarSame,
-        vectorSame21 );
+        {} );
       
-      internal::computeInnerIntegrals< internal::AI, true >(
+      internal::computeInnerIntegrals< internal::AI, false >(
         Iai[ spin ],
         r1Grid,
         r2Grid,
         r1OccupiedValues[ spin ].toViewConst(),
         r2OccupiedValues[ spin ].toViewConst(),
-        r2OccupiedGradients[ spin ].toViewConst(),
+        {},
         scalarSame,
-        vectorSame21 );
+        {} );
       
-      internal::computeInnerIntegrals< internal::AA12, true >(
-        Iaa12[ spin ],
-        r1Grid,
-        r2Grid,
-        r1OccupiedValues[ spin ].toViewConst(),
-        r2OccupiedValues[ spin ].toViewConst(),
-        r2OccupiedGradients[ spin ].toViewConst(),
-        scalarSame,
-        vectorSame12 );
-      
-      internal::computeInnerIntegrals< internal::JA, true >(
-        Ija[ spin ],
-        r1Grid,
-        r2Grid,
-        r1OccupiedValues[ spin ].toViewConst(),
-        r2OccupiedValues[ spin ].toViewConst(),
-        r2OccupiedGradients[ spin ].toViewConst(),
-        scalarSame,
-        vectorSame21 );
-
-      internal::computeInnerIntegrals< internal::AA, true >(
+      internal::computeInnerIntegrals< internal::AA, false >(
         IOppoaa[ spin ],
         r1Grid,
         r2Grid,
-        r1OccupiedValues[ !spin ].toViewConst(),
-        r2OccupiedValues[ !spin ].toViewConst(),
-        r2OccupiedGradients[ !spin ].toViewConst(),
+        r1OccupiedValues[ spin ].toViewConst(),
+        r2OccupiedValues[ spin ].toViewConst(),
+        {},
         scalarOppo,
-        vectorOppo21 );
-      
-      internal::computeInnerIntegrals< internal::AA12, true >(
-        IOppoaa12[ spin ],
-        r1Grid,
-        r2Grid,
-        r1OccupiedValues[ !spin ].toViewConst(),
-        r2OccupiedValues[ !spin ].toViewConst(),
-        r2OccupiedGradients[ !spin ].toViewConst(),
-        scalarOppo,
-        vectorOppo12 );
+        {} );
     }
 
+    // constructFockOperator( oneElectronTerms, twoElectronTermsSameSpin, twoElectronTermsOppositeSpin );
+
+    fockOperator.zero();
     for( int spin = 0; spin < 2; ++spin )
     {
       TCSCF_MARK_SCOPE( "Constructing fock operator" );
@@ -1151,21 +1243,45 @@ RealType< T > TCHartreeFock< T >::compute(
           IndexType const j = ji / basisSize;
           IndexType const i = ji % basisSize;
 
-          T twoElectronContribution = 0;
+          T scalar = 0;
+          T vector = 0;
           for( IndexType r1Idx = 0; r1Idx < r1Grid.nGrid(); ++r1Idx )
           {
-            twoElectronContribution += 
-              conj( r1Grid.basisValues( r1Idx, j ) ) * Iaa( spin, r1Idx ) * r1Grid.basisValues( r1Idx, i )
-            + conj( r1Grid.basisValues( r1Idx, j ) ) * Iaa12( spin, r1Idx ).first * r1Grid.basisValues( r1Idx, i )
-            + conj( r1Grid.basisValues( r1Idx, j ) ) * dot( Iaa12( spin, r1Idx ).second, r1Grid.basisGradients( r1Idx, i ) )
-            - conj( r1Grid.basisValues( r1Idx, j ) ) * Iai( spin, r1Idx, i )
-            - Ija( spin, r1Idx, j ) * r1Grid.basisValues( r1Idx, i )
-            + conj( r1Grid.basisValues( r1Idx, j ) ) * IOppoaa( spin, r1Idx ) * r1Grid.basisValues( r1Idx, i )
-            + conj( r1Grid.basisValues( r1Idx, j ) ) * IOppoaa12( spin, r1Idx ).first * r1Grid.basisValues( r1Idx, i )
-            + conj( r1Grid.basisValues( r1Idx, j ) ) * dot( IOppoaa12( spin, r1Idx ).second, r1Grid.basisGradients( r1Idx, i ) );
+            Cartesian< T > sumOfScaledGradients {};
+            for( IndexType a = 0; a < nElectrons[ spin ]; ++a )
+            {
+              sumOfScaledGradients.scaledAdd( conj( r1OccupiedValues[ spin ]( r1Idx, a ) ), r1OccupiedGradients[ spin ]( r1Idx, a ) );
+            }
+            
+            scalar += conj( r1Grid.basisValues( r1Idx, j ) ) * Iaa( spin, r1Idx ) * r1Grid.basisValues( r1Idx, i );
+
+            vector += conj( r1Grid.basisValues( r1Idx, j ) ) * dot( VaaSame( spin, r1Idx ), r1Grid.basisGradients( r1Idx, i ) );
+
+            vector += dot( VjiSame( r1Idx, j, i ), sumOfScaledGradients );
+
+
+            scalar -= conj( r1Grid.basisValues( r1Idx, j ) ) * Iai( spin, r1Idx, i );
+            
+            vector -= conj( r1Grid.basisValues( r1Idx, j ) ) * Vai( spin, r1Idx, i );
+
+            vector -= dot( Vja( spin, r1Idx, j ), r1Grid.basisGradients( r1Idx, i ) );
+
+
+            Cartesian< T > sumOfScaledGradientsOppo {};
+            for( IndexType a = 0; a < nElectrons[ spin ]; ++a )
+            {
+              sumOfScaledGradientsOppo.scaledAdd( conj( r1OccupiedValues[ !spin ]( r1Idx, a ) ), r1OccupiedGradients[ !spin ]( r1Idx, a ) );
+            }
+
+            scalar += conj( r1Grid.basisValues( r1Idx, j ) ) * IOppoaa( !spin, r1Idx ) * r1Grid.basisValues( r1Idx, i );
+
+            vector += conj( r1Grid.basisValues( r1Idx, j ) ) * dot( VaaOppo( !spin, r1Idx ), r1Grid.basisGradients( r1Idx, i ) );
+
+            vector += dot( VjiOppo( r1Idx, j, i ), sumOfScaledGradientsOppo );
           }
 
-          fockOperator( spin, j, i ) = oneElectronTerms( j, i ) + twoElectronContribution / 2;
+          atomicAdd< ParallelHost >( &fockOperator( spin, j, i ), oneElectronTerms( j, i ) + (scalar + vector) / 2 );
+          atomicAdd< ParallelHost >( &fockOperator( spin, i, j ), -conj( vector ) / 2 );
         }
       );
     }

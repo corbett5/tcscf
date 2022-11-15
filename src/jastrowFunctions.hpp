@@ -86,7 +86,7 @@ struct Ochi
 
     Real const r1Scale = a / (std::pow( r1, 2 ) * (r1 + a));
     Real const r12Scale = a12 / (std::pow( r12, 2 ) * (r12 + a12));
-  
+
     Real r1Length = 0;
     Real r12Length = 0;
     for( int idx = 0; idx < S.size( 0 ); ++idx )

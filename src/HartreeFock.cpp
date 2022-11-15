@@ -183,6 +183,89 @@ void occupiedOrbitalGradients(
   );
 }
 
+/**
+ * TODO: Merge with calculate Vaa
+ */
+template< typename T, int USD, typename U >
+void calculateFaa(
+  ArraySlice1d< T, USD > const & Faa,
+  ArrayView3d< U const > const & Fji,
+  ArraySlice2d< T const > const & density )
+{
+  TCSCF_MARK_SCOPE( "calculateFaa" );
+  
+  IndexType const nGridR1 = Faa.size();
+  IndexType const nBasis = Fji.size( 1 );
+
+  LVARRAY_ERROR_IF_NE( Faa.size(), nGridR1 );
+
+  LVARRAY_ERROR_IF_NE( Fji.size( 0 ), nGridR1 );
+  LVARRAY_ERROR_IF_NE( Fji.size( 1 ), nBasis );
+  LVARRAY_ERROR_IF_NE( Fji.size( 2 ), nBasis );
+
+  LVARRAY_ERROR_IF_NE( density.size( 0 ), nBasis );
+  LVARRAY_ERROR_IF_NE( density.size( 1 ), nBasis );
+
+
+  forAll< DefaultPolicy< ParallelHost > >( nGridR1,
+    [=] ( IndexType const r1Idx )
+    {
+      T result = 0;
+      for( IndexType j = 0; j < nBasis; ++j )
+      {
+        for( IndexType i = 0; i < nBasis; ++i )
+        {
+          result += density( i, j ) * Fji( r1Idx, j, i );
+        }
+      }
+
+      Faa[ r1Idx ] = result;
+    }
+  );
+}
+
+template< typename T, int USD, typename U >
+void calculateFai(
+  ArraySlice2d< T, USD > const & Fai,
+  ArrayView3d< U const > const & Fji,
+  ArrayView2d< T const > const & r1BasisValues,
+  ArraySlice2d< T const > const & density )
+{
+  TCSCF_MARK_SCOPE( "calculateFai" );
+  
+  IndexType const nGridR1 = Fai.size( 0 );
+  IndexType const nBasis = Fai.size( 1 );
+
+  LVARRAY_ERROR_IF_NE( Fji.size( 0 ), nGridR1 );
+  LVARRAY_ERROR_IF_NE( Fji.size( 1 ), nBasis );
+  LVARRAY_ERROR_IF_NE( Fji.size( 2 ), nBasis );
+
+  LVARRAY_ERROR_IF_NE( r1BasisValues.size( 0 ), nGridR1 );
+  LVARRAY_ERROR_IF_NE( r1BasisValues.size( 1 ), nBasis );
+
+  LVARRAY_ERROR_IF_NE( density.size( 0 ), nBasis );
+  LVARRAY_ERROR_IF_NE( density.size( 1 ), nBasis );
+
+  forAll< DefaultPolicy< ParallelHost > >( nGridR1,
+    [=] ( IndexType const r1Idx )
+    {
+      for( IndexType j = 0; j < nBasis; ++j )
+      {
+        T kSum = 0;
+        for( IndexType k = 0; k < nBasis; ++k )
+        {
+          kSum += density( k, j ) * r1BasisValues( r1Idx, k );
+        }
+
+        for( IndexType i = 0; i < nBasis; ++i )
+        {
+          Fai( r1Idx, i ) += kSum * Fji( r1Idx, j, i );
+        }
+      }
+    }
+  );
+}
+
 template< typename T >
 void calculateVaa(
   ArraySlice1d< Cartesian< T > > const & Vaa,
@@ -315,266 +398,6 @@ void calculateVja(
   );
 }
 
-/**
- *
- */
-template< bool USE_VECTOR, typename T >
-void ai(
-  ArraySlice1d< T > const integralValues,
-  ArraySlice1d< T const > const & occupiedValuesR1,
-  ArrayView2d< RealType< T > const > const & basisValuesR2,
-  ArrayView2d< T const > const & occupiedValuesR2,
-  ArrayView2d< Cartesian< T > const > const & basisGradientsR2,
-  ArraySlice1d< RealType< T > const > const & scalarFunction,
-  ArraySlice1d< Cartesian< RealType< T > > const > const & vectorFunction )
-{
-  using Real = RealType< T >;
-
-  IndexType const nGridR2 = scalarFunction.size();
-  IndexType const nOccupied = occupiedValuesR1.size();
-  IndexType const nBasis = integralValues.size();
-
-  for( IndexType r2Idx = 0; r2Idx < nGridR2; ++r2Idx )
-  {
-    T aSum = 0;
-    for( IndexType a = 0; a < nOccupied; ++a )
-    {
-      aSum += occupiedValuesR1[ a ] * conj( occupiedValuesR2( r2Idx, a ) );
-    }
-
-    Real const scalalPotential = scalarFunction[ r2Idx ];
-
-    if constexpr ( !USE_VECTOR )
-    {
-      for( IndexType i = 0; i < nBasis; ++i )
-      {
-        integralValues[ i ] += aSum * scalalPotential * basisValuesR2( r2Idx, i );
-      }
-    }
-    else
-    {
-      Cartesian< Real > const vector = vectorFunction[ r2Idx ];
-      
-      for( IndexType i = 0; i < integralValues.size(); ++i )
-      {
-        integralValues[ i ] += aSum * (scalalPotential * basisValuesR2( r2Idx, i ) + dot( vector, basisGradientsR2( r2Idx, i ) ));
-      }
-    }
-  }
-
-  constexpr Real scale = 2 * pi< Real >;
-  for( auto & value : integralValues )
-  {
-    value *= scale;
-  }
-}
-
-/**
- *
- */
-template< bool USE_VECTOR, typename T >
-void ja(
-  ArraySlice1d< T > const integralValues,
-  ArraySlice1d< T const > const & occupiedValuesR1,
-  ArrayView2d< RealType< T > const > const & basisValuesR2,
-  ArrayView2d< Cartesian< T > const > const & occupiedGradientsR2,
-  ArraySlice1d< Cartesian< RealType< T > > const > const & vectorFunction )
-{
-  // TODO: get rid of USE_VECTOR
-  static_assert( USE_VECTOR );
-
-  using Real = RealType< T >;
-
-  IndexType const nGridR2 = vectorFunction.size();
-  IndexType const nOccupied = occupiedValuesR1.size();
-  IndexType const nBasis = integralValues.size();
-
-  for( IndexType r2Idx = 0; r2Idx < nGridR2; ++r2Idx )
-  {
-    Cartesian< T > gradASum {};
-    for( IndexType a = 0; a < nOccupied; ++a )
-    {
-      gradASum.scaledAdd( conj( occupiedValuesR1[ a ] ), occupiedGradientsR2( r2Idx, a ) );
-    }
-
-    T const integrand = dot( vectorFunction[ r2Idx ], gradASum );
-    
-    for( IndexType j = 0; j < nBasis; ++j )
-    {
-      integralValues[ j ] += basisValuesR2( r2Idx, j ) * integrand;
-    }
-  }
-
-  Real const scale = 2 * pi< Real >;
-  for( auto & value : integralValues )
-  {
-    value *= scale;
-  }
-}
-
-/**
- *
- */
-template< bool USE_VECTOR, typename T >
-void aa(
-  T & result,
-  ArrayView2d< T const > const & occupiedValuesR2,
-  ArrayView2d< Cartesian< T > const > const & occupiedGradientsR2,
-  ArraySlice1d< RealType< T > const > const & scalarFunction,
-  ArraySlice1d< Cartesian< RealType< T > > const > const & vectorFunction )
-{
-  using Real = RealType< T >;
-
-  IndexType const nGridR2 = scalarFunction.size();
-  IndexType const nOccupied = occupiedValuesR2.size( 1 );
-
-  T answer {};
-  for( IndexType r2Idx = 0; r2Idx < nGridR2; ++r2Idx )
-  {
-    Real sumOfNorms = 0;
-    for( IndexType a = 0; a < nOccupied; ++a )
-    {
-      sumOfNorms += std::norm( occupiedValuesR2( r2Idx, a ) );
-    }
-
-    T contribution = sumOfNorms * scalarFunction[ r2Idx ];
-    if constexpr ( USE_VECTOR )
-    {
-      Cartesian< T > sumOfGradients {};
-      for( IndexType a = 0; a < nOccupied; ++a )
-      {
-        sumOfGradients.scaledAdd( conj( occupiedValuesR2( r2Idx, a ) ), occupiedGradientsR2( r2Idx, a ) );
-      }
-
-      contribution += dot( vectorFunction[ r2Idx ], sumOfGradients );
-    }
-
-    answer += contribution;
-  }
-
-  result = 2 * pi< Real > * answer;
-}
-
-/**
- *
- */
-template< bool USE_VECTOR, typename T >
-void aa12(
-  Cartesian< T > & result,
-  ArrayView2d< T const > const & occupiedValuesR2,
-  ArraySlice1d< Cartesian< RealType< T > > const > const & vectorFunction )
-{
-  // TODO: Remove this template parameter.
-  static_assert( USE_VECTOR );
-
-  using Real = RealType< T >;
-
-  IndexType const nGridR2 = vectorFunction.size();
-  IndexType const nOccupied = occupiedValuesR2.size( 1 );
-
-  Cartesian< Real > vectorIntegral {};
-  for( IndexType r2Idx = 0; r2Idx < nGridR2; ++r2Idx )
-  {
-    Real sumOfNorms = 0;
-    for( IndexType a = 0; a < nOccupied; ++a )
-    {
-      sumOfNorms += std::norm( occupiedValuesR2( r2Idx, a ) );
-    }
-
-    vectorIntegral.scaledAdd( sumOfNorms, vectorFunction[ r2Idx ] );
-  }
-
-  result = { 2 * pi< Real > * vectorIntegral.x(),
-             2 * pi< Real > * vectorIntegral.y(),
-             2 * pi< Real > * vectorIntegral.z() };
-}
-
-static constexpr int AI = 0;
-static constexpr int AA = 1;
-static constexpr int JA = 2;
-static constexpr int AA12 = 3;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////
-template< int INTEGRAL_TYPE, bool USE_VECTOR, typename U, typename T, int DIM >
-void computeInnerIntegrals(
-  ArraySlice< U, DIM > const & innerIntegrals,
-  integration::QMCGrid< RealType< T >, 3 > const & r1Grid,
-  integration::QMCGrid< RealType< T >, 2 > const & r2Grid,
-  ArrayView2d< T const > const & r1OccupiedValues,
-  ArrayView2d< T const > const & r2OccupiedValues,
-  ArrayView2d< Cartesian< T > const > const r2OccupiedGradients,
-  ArrayView2d< RealType< T > const > const & scalarFunction,
-  ArrayView2d< Cartesian< RealType< T > > const > const & vectorFunction )
-{
-  std::string caliperTag;
-  if( INTEGRAL_TYPE == AI )
-  {
-    caliperTag = "Computing I^a_i";
-  }
-  if( INTEGRAL_TYPE == JA )
-  {
-    caliperTag = "Computing I^j_a";
-  }
-  if( INTEGRAL_TYPE == AA )
-  {
-    caliperTag = "Computing I^a_a";
-  }
-  if( INTEGRAL_TYPE == AA12 )
-  {
-    caliperTag = "Computing I12^a_a";
-  }
-
-  TCSCF_MARK_SCOPE_STRING( caliperTag.data() );
-
-  using PolicyType = ParallelHost;
-  using Real = RealType< T >;
-  
-  ArrayView2d< Real const > const r2BasisValues = r2Grid.basisValues.toViewConst();
-  ArrayView2d< Cartesian< T > const > const r2BasisGradients = r2Grid.basisGradients.toViewConst();
-
-  forAll< DefaultPolicy< PolicyType > >( r1Grid.quadratureGrid.points.size( 1 ),
-    [=] ( IndexType const r1Idx )
-    {
-      if constexpr ( INTEGRAL_TYPE == AI )
-      {
-        internal::ai< USE_VECTOR >(
-          innerIntegrals[ r1Idx ],
-          r1OccupiedValues[ r1Idx ],
-          r2BasisValues,
-          r2OccupiedValues,
-          r2BasisGradients,
-          scalarFunction[ r1Idx ],
-          vectorFunction[ r1Idx ] );
-      }
-      if constexpr ( INTEGRAL_TYPE == JA )
-      {
-        internal::ja< USE_VECTOR >(
-          innerIntegrals[ r1Idx ],
-          r1OccupiedValues[ r1Idx ],
-          r2BasisValues,
-          r2OccupiedGradients,
-          vectorFunction[ r1Idx ] );
-      }
-      if constexpr ( INTEGRAL_TYPE == AA )
-      {
-        internal::aa< USE_VECTOR >(
-          innerIntegrals[ r1Idx ],
-          r2OccupiedValues,
-          r2OccupiedGradients,
-          scalarFunction[ r1Idx ],
-          vectorFunction[ r1Idx ] );
-      }
-      if constexpr ( INTEGRAL_TYPE == AA12 )
-      {
-        internal::aa12< USE_VECTOR >(
-          innerIntegrals[ r1Idx ],
-          r2OccupiedValues,
-          vectorFunction[ r1Idx ] );
-      }
-    }
-  );
-}
-
 } // namespace internal
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -584,14 +407,12 @@ RealType< T > RCSHartreeFock< T >::compute(
   ArrayView2d< T const > const & overlap,
   ArrayView2d< Real const > const & oneElectronTerms,
   integration::QMCGrid< Real, 3 > const & r1Grid,
-  integration::QMCGrid< Real, 2 > const & r2Grid,
-  ArrayView2d< Real const > const & r12Inv )
+  ArrayView3d< Real const > const & Fji )
 {
   TCSCF_MARK_FUNCTION;
 
   LVARRAY_ERROR_IF_NE( oneElectronTerms.size( 1 ), basisSize );
   LVARRAY_ERROR_IF_NE( r1Grid.nBasis(), basisSize );
-  LVARRAY_ERROR_IF_NE( r2Grid.nBasis(), basisSize );
 
   if( !orthogonal )
   {
@@ -606,39 +427,15 @@ RealType< T > RCSHartreeFock< T >::compute(
 
   Real energy = std::numeric_limits< Real >::max();
 
-  Array2d< T > const r1OccupiedValues( r1Grid.nGrid(), nElectrons / 2 );
-  Array2d< T > const r2OccupiedValues( r2Grid.nGrid(), nElectrons / 2 );
-
-  Array2d< T > const innerIntegralsKI( r1Grid.nGrid(), basisSize );
-  Array1d< T > const innerIntegralsKK( r1Grid.nGrid() );
-
-  Array2d< T > const fockTwoTermsSameSpin( basisSize, basisSize );
+  Array1d< T > const Faa( r1Grid.nGrid() );
+  Array2d< T > const Fai( r1Grid.nGrid(), basisSize );
 
   for( _iter = 0; _iter < 50; ++_iter )
   {
-    internal::occupiedOrbitalValues( r1OccupiedValues, r1Grid.basisValues.toViewConst(), eigenvectors.toSliceConst() );
-    internal::occupiedOrbitalValues( r2OccupiedValues, r2Grid.basisValues.toViewConst(), eigenvectors.toSliceConst() );
-
-    innerIntegralsKI.zero();
-    internal::computeInnerIntegrals< internal::AI, false >(
-      innerIntegralsKI.toSlice(),
-      r1Grid,
-      r2Grid,
-      r1OccupiedValues.toViewConst(),
-      r2OccupiedValues.toViewConst(),
-      {},
-      r12Inv,
-      {} );
-    
-    internal::computeInnerIntegrals< internal::AA, false >(
-      innerIntegralsKK.toSlice(),
-      r1Grid,
-      r2Grid,
-      r1OccupiedValues.toViewConst(),
-      r2OccupiedValues.toViewConst(),
-      {},
-      r12Inv,
-      {} );
+    Faa.zero();
+    Fai.zero();
+    internal::calculateFaa( Faa.toSlice(), Fji, density.toSliceConst() );
+    internal::calculateFai( Fai.toSlice(), Fji, r1Grid.basisValues.toViewConst(), density.toSliceConst() );
 
     {
       TCSCF_MARK_SCOPE( "Constructing fock operator" );
@@ -653,7 +450,7 @@ RealType< T > RCSHartreeFock< T >::compute(
           T twoElectronContribution = 0;
           for( IndexType r1Idx = 0; r1Idx < r1Grid.nGrid(); ++r1Idx )
           {
-            twoElectronContribution += conj( r1Grid.basisValues( r1Idx, j ) ) * (2 * r1Grid.basisValues( r1Idx, i ) * innerIntegralsKK( r1Idx ) - innerIntegralsKI( r1Idx, i ) );
+            twoElectronContribution += conj( r1Grid.basisValues( r1Idx, j ) ) * (2 * r1Grid.basisValues( r1Idx, i ) * Faa( r1Idx ) - Fai( r1Idx, i ) );
           }
 
           fockOperator( j, i ) = oneElectronTerms( j, i ) + twoElectronContribution;
@@ -783,8 +580,7 @@ RealType< T > UOSHartreeFock< T >::compute(
   ArrayView2d< T const > const & overlap,
   ArrayView2d< Real const > const & oneElectronTerms,
   integration::QMCGrid< Real, 3 > const & r1Grid,
-  integration::QMCGrid< Real, 2 > const & r2Grid,
-  ArrayView2d< Real const > const & r12Inv )
+  ArrayView3d< Real const > const & Fji )
 {
   TCSCF_MARK_FUNCTION;
 
@@ -809,46 +605,17 @@ RealType< T > UOSHartreeFock< T >::compute(
 
   // TODO: figure out a way to initialize the density in a non-zero manner.
 
-  Array2d< T > const r1OccupiedValues[ 2 ]{ Array2d< T >( r1Grid.nGrid(), nElectrons[ 0 ] ),
-                                            Array2d< T >( r1Grid.nGrid(), nElectrons[ 1 ] ) };
-
-  Array2d< T > const r2OccupiedValues[ 2 ]{ Array2d< T >( r2Grid.nGrid(), nElectrons[ 0 ] ),
-                                            Array2d< T >( r2Grid.nGrid(), nElectrons[ 0 ] ) };
-
-  Array3d< T > const innerIntegralsKI( 2, r1Grid.nGrid(), basisSize );
-  Array2d< T > const innerIntegralsKK( 2, r1Grid.nGrid() );
+  Array2d< T > const Faa( 2, r1Grid.nGrid() );
+  Array3d< T > const Fai( 2, r1Grid.nGrid(), basisSize );
 
   for( _iter = 0; _iter < 50; ++_iter )
   {
+    Faa.zero();
+    Fai.zero();
     for( int spin = 0; spin < 2; ++spin )
     {
-      internal::occupiedOrbitalValues( r1OccupiedValues[ spin ].toView(), r1Grid.basisValues.toViewConst(), eigenvectors[ spin ].toSliceConst() );
-      internal::occupiedOrbitalValues( r2OccupiedValues[ spin ].toView(), r2Grid.basisValues.toViewConst(), eigenvectors[ spin ].toSliceConst() );
-    }
-
-    innerIntegralsKI.zero();
-    innerIntegralsKK.zero();
-    for( int spin = 0; spin < 2; ++spin )
-    {
-      internal::computeInnerIntegrals< internal::AI, false >(
-        innerIntegralsKI[ spin ],
-        r1Grid,
-        r2Grid,
-        r1OccupiedValues[ spin ].toViewConst(),
-        r2OccupiedValues[ spin ].toViewConst(),
-        {},
-        r12Inv,
-        {} );
-      
-      internal::computeInnerIntegrals< internal::AA, false >(
-        innerIntegralsKK[ spin ],
-        r1Grid,
-        r2Grid,
-        r1OccupiedValues[ spin ].toViewConst(),
-        r2OccupiedValues[ spin ].toViewConst(),
-        {},
-        r12Inv,
-        {} );
+      internal::calculateFaa( Faa[ spin ], Fji, density[ spin ].toSliceConst() );
+      internal::calculateFai( Fai[ spin ], Fji, r1Grid.basisValues.toViewConst(), density[ spin ].toSliceConst() );
     }
 
     for( int spin = 0; spin < 2; ++spin )
@@ -866,7 +633,7 @@ RealType< T > UOSHartreeFock< T >::compute(
           for( IndexType r1Idx = 0; r1Idx < r1Grid.nGrid(); ++r1Idx )
           {
             twoElectronContribution += conj( r1Grid.basisValues( r1Idx, j ) ) *
-              (r1Grid.basisValues( r1Idx, i ) * (innerIntegralsKK( spin, r1Idx ) + innerIntegralsKK( !spin, r1Idx )) - innerIntegralsKI( spin, r1Idx, i ));
+              (r1Grid.basisValues( r1Idx, i ) * (Faa( spin, r1Idx ) + Faa( !spin, r1Idx )) - Fai( spin, r1Idx, i ));
           }
 
           fockOperator( spin, j, i ) = oneElectronTerms( j, i ) + twoElectronContribution;
@@ -1120,9 +887,8 @@ RealType< T > TCHartreeFock< T >::compute(
   ArrayView4d< T const > const & twoElectronTermsSameSpin,
   ArrayView4d< T const > const & twoElectronTermsOppositeSpin,
   integration::QMCGrid< Real, 3 > const & r1Grid,
-  integration::QMCGrid< Real, 2 > const & r2Grid,
-  ArrayView2d< Real const > const & scalarSame,
-  ArrayView2d< Real const > const & scalarOppo,
+  ArrayView3d< Real const > const & FjiSame,
+  ArrayView3d< Real const > const & FjiOppo,
   ArrayView3d< Cartesian< T > const > const & VjiSame,
   ArrayView3d< Cartesian< T > const > const & VjiOppo )
 {
@@ -1162,15 +928,13 @@ RealType< T > TCHartreeFock< T >::compute(
   Array2d< T > const r1OccupiedValues[ 2 ]{ Array2d< T >( r1Grid.nGrid(), nElectrons[ 0 ] ),
                                             Array2d< T >( r1Grid.nGrid(), nElectrons[ 1 ] ) };
 
-  Array2d< T > const r2OccupiedValues[ 2 ]{ Array2d< T >( r2Grid.nGrid(), nElectrons[ 0 ] ),
-                                            Array2d< T >( r2Grid.nGrid(), nElectrons[ 1 ] ) };
-
   Array2d< Cartesian< T > > const r1OccupiedGradients[ 2 ]{ Array2d< Cartesian< T > >( r1Grid.nGrid(), nElectrons[ 0 ] ),
                                                             Array2d< Cartesian< T > >( r1Grid.nGrid(), nElectrons[ 1 ] ) };
 
-  Array2d< T > const Iaa( 2, r1Grid.nGrid() );
-  Array3d< T > const Iai( 2, r1Grid.nGrid(), basisSize );
-  Array2d< T > const IOppoaa( 2, r1Grid.nGrid() );
+  Array2d< T > const FaaSame( 2, r1Grid.nGrid() );
+  Array2d< T > const FaaOppo( 2, r1Grid.nGrid() );
+  
+  Array3d< T > const FaiSame( 2, r1Grid.nGrid(), basisSize );
 
   Array2d< Cartesian< T > > const VaaSame( 2, r1Grid.nGrid() );
   Array2d< Cartesian< T > > const VaaOppo( 2, r1Grid.nGrid() );
@@ -1180,53 +944,30 @@ RealType< T > TCHartreeFock< T >::compute(
 
   for( _iter = 0; _iter < 100; ++_iter )
   {
+    FaaSame.zero();
+    FaaOppo.zero();
+    FaiSame.zero();
+
+    VaaSame.zero();
+    VaaOppo.zero();
     Vai.zero();
     Vja.zero();
-    Iaa.zero();
-    Iai.zero();
-    IOppoaa.zero();
 
     for( int spin = 0; spin < 2; ++spin )
     {
       internal::occupiedOrbitalValues( r1OccupiedValues[ spin ].toView(), r1Grid.basisValues.toViewConst(), occupiedOrbitals[ spin ].toSliceConst() );
-      internal::occupiedOrbitalValues( r2OccupiedValues[ spin ].toView(), r2Grid.basisValues.toViewConst(), occupiedOrbitals[ spin ].toSliceConst() );
       internal::occupiedOrbitalGradients( r1OccupiedGradients[ spin ].toView(), r1Grid.basisGradients.toViewConst(), occupiedOrbitals[ spin ].toSliceConst() );
     
+      internal::calculateFaa( FaaSame[ spin ], FjiSame, density[ spin ].toSliceConst() );
+      internal::calculateFaa( FaaOppo[ spin ], FjiOppo, density[ spin ].toSliceConst() );
+
+      internal::calculateFai( FaiSame[ spin ], FjiSame, r1Grid.basisValues.toViewConst(), density[ spin ].toSliceConst() );
+
       internal::calculateVaa( VaaSame[ spin ], VjiSame, density[ spin ].toSliceConst() );
       internal::calculateVaa( VaaOppo[ spin ], VjiOppo, density[ spin ].toSliceConst() );
 
       internal::calculateVai( Vai[ spin ], VjiSame, occupiedOrbitals[ spin ].toViewConst(), r1OccupiedGradients[ spin ].toViewConst() );
       internal::calculateVja( Vja[ spin ], VjiSame, occupiedOrbitals[ spin ].toViewConst(), r1OccupiedValues[ spin ].toViewConst() );
-
-      internal::computeInnerIntegrals< internal::AA, false >(
-        Iaa[ spin ],
-        r1Grid,
-        r2Grid,
-        r1OccupiedValues[ spin ].toViewConst(),
-        r2OccupiedValues[ spin ].toViewConst(),
-        {},
-        scalarSame,
-        {} );
-      
-      internal::computeInnerIntegrals< internal::AI, false >(
-        Iai[ spin ],
-        r1Grid,
-        r2Grid,
-        r1OccupiedValues[ spin ].toViewConst(),
-        r2OccupiedValues[ spin ].toViewConst(),
-        {},
-        scalarSame,
-        {} );
-      
-      internal::computeInnerIntegrals< internal::AA, false >(
-        IOppoaa[ spin ],
-        r1Grid,
-        r2Grid,
-        r1OccupiedValues[ spin ].toViewConst(),
-        r2OccupiedValues[ spin ].toViewConst(),
-        {},
-        scalarOppo,
-        {} );
     }
 
     // constructFockOperator( oneElectronTerms, twoElectronTermsSameSpin, twoElectronTermsOppositeSpin );
@@ -1253,14 +994,14 @@ RealType< T > TCHartreeFock< T >::compute(
               sumOfScaledGradients.scaledAdd( conj( r1OccupiedValues[ spin ]( r1Idx, a ) ), r1OccupiedGradients[ spin ]( r1Idx, a ) );
             }
             
-            scalar += conj( r1Grid.basisValues( r1Idx, j ) ) * Iaa( spin, r1Idx ) * r1Grid.basisValues( r1Idx, i );
+            scalar += conj( r1Grid.basisValues( r1Idx, j ) ) * FaaSame( spin, r1Idx ) * r1Grid.basisValues( r1Idx, i );
 
             vector += conj( r1Grid.basisValues( r1Idx, j ) ) * dot( VaaSame( spin, r1Idx ), r1Grid.basisGradients( r1Idx, i ) );
 
             vector += dot( VjiSame( r1Idx, j, i ), sumOfScaledGradients );
 
 
-            scalar -= conj( r1Grid.basisValues( r1Idx, j ) ) * Iai( spin, r1Idx, i );
+            scalar -= conj( r1Grid.basisValues( r1Idx, j ) ) * FaiSame( spin, r1Idx, i );
             
             vector -= conj( r1Grid.basisValues( r1Idx, j ) ) * Vai( spin, r1Idx, i );
 
@@ -1273,7 +1014,7 @@ RealType< T > TCHartreeFock< T >::compute(
               sumOfScaledGradientsOppo.scaledAdd( conj( r1OccupiedValues[ !spin ]( r1Idx, a ) ), r1OccupiedGradients[ !spin ]( r1Idx, a ) );
             }
 
-            scalar += conj( r1Grid.basisValues( r1Idx, j ) ) * IOppoaa( !spin, r1Idx ) * r1Grid.basisValues( r1Idx, i );
+            scalar += conj( r1Grid.basisValues( r1Idx, j ) ) * FaaOppo( !spin, r1Idx ) * r1Grid.basisValues( r1Idx, i );
 
             vector += conj( r1Grid.basisValues( r1Idx, j ) ) * dot( VaaOppo( !spin, r1Idx ), r1Grid.basisGradients( r1Idx, i ) );
 

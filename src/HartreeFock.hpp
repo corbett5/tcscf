@@ -86,6 +86,52 @@ void precomputeIntegrand(
   );
 }
 
+/**
+ * 
+ */
+template< typename REAL >
+Array3d< REAL > computeF(
+  integration::QMCGrid< REAL, 3 > const & r1Grid,
+  integration::QMCGrid< REAL, 2 > const & r2Grid,
+  ArrayView2d< REAL const > const & scalarFunction )
+{
+  TCSCF_MARK_FUNCTION;
+
+  using PolicyType = ParallelHost;
+  using Real = REAL;
+
+  IndexType const nBasis = r1Grid.nBasis();
+  IndexType const nGridR1 = r1Grid.nGrid();
+  IndexType const nGridR2 = r2Grid.nGrid();
+
+  LVARRAY_ERROR_IF_NE( r1Grid.nBasis(), r2Grid.nBasis() );
+  LVARRAY_ERROR_IF_NE( scalarFunction.size( 0 ), nGridR1 );
+  LVARRAY_ERROR_IF_NE( scalarFunction.size( 1 ), nGridR2 );
+
+  ArrayView2d< Real const > const r2BasisValues = r2Grid.basisValues.toViewConst();
+  Array3d< Real > F( nGridR1, nBasis, nBasis );
+
+  forAll< DefaultPolicy< PolicyType > >( nGridR1,
+    [=, F=F.toView()] ( IndexType const r1Idx )
+    {
+      for( IndexType j = 0; j < nBasis; ++j )
+      {
+        for( IndexType i = 0; i < nBasis; ++i )
+        {
+          Real answer {};
+          for( IndexType r2Idx = 0; r2Idx < nGridR2; ++r2Idx )
+          {
+            answer += conj( r2BasisValues( r2Idx, j ) ) * scalarFunction( r1Idx, r2Idx ) * r2BasisValues( r2Idx, i );
+          }
+
+          F( r1Idx, j, i ) = 2 * pi< Real > * answer;
+        }
+      }
+    }
+  );
+
+  return F;
+}
 
 /**
  * 
@@ -106,38 +152,31 @@ Array3d< Cartesian< std::complex< REAL > > > computeV(
 
   IndexType const nBasis = r1Grid.nBasis();
 
-  ArrayView2d< Complex const > const r1BasisValues = r1Grid.basisValues.toViewConst();
-
   ArrayView2d< Complex const > const r2BasisValues = r2Grid.basisValues.toViewConst();
-
 
   IndexType const nGridR1 = r1Grid.nGrid();
   IndexType const nGridR2 = r2Grid.nGrid();
   Array3d< Cartesian< Complex > > V( nGridR1, nBasis, nBasis );
 
-  {
-    TCSCF_MARK_SCOPE("Computing V");
-
-    forAll< DefaultPolicy< PolicyType > >( nGridR1,
-      [=, V=V.toView()] ( IndexType const r1Idx )
+  forAll< DefaultPolicy< PolicyType > >( nGridR1,
+    [=, V=V.toView()] ( IndexType const r1Idx )
+    {
+      for( IndexType j = 0; j < nBasis; ++j )
       {
-        for( IndexType j = 0; j < nBasis; ++j )
+        for( IndexType i = 0; i < nBasis; ++i )
         {
-          for( IndexType i = 0; i < nBasis; ++i )
+          Cartesian< Complex > answer {};
+          for( IndexType r2Idx = 0; r2Idx < nGridR2; ++r2Idx )
           {
-            Cartesian< Complex > answer {};
-            for( IndexType r2Idx = 0; r2Idx < nGridR2; ++r2Idx )
-            {
-              Complex const scale = conj( r1BasisValues( r2Idx, j ) ) * r2BasisValues( r2Idx, i );
-              answer.scaledAdd( scale, vectorFunction( r1Idx, r2Idx ) );
-            }
-
-            V( r1Idx, j, i ) = answer;
+            Complex const scale = conj( r2BasisValues( r2Idx, j ) ) * r2BasisValues( r2Idx, i );
+            answer.scaledAdd( scale, vectorFunction( r1Idx, r2Idx ) );
           }
+
+          V( r1Idx, j, i ) = answer;
         }
       }
-    );
-  }
+    }
+  );
 
   return V;
 }
@@ -186,8 +225,7 @@ struct RCSHartreeFock
     ArrayView2d< T const > const & overlap,
     ArrayView2d< Real const > const & oneElectronTerms,
     integration::QMCGrid< Real, 3 > const & r1Grid,
-    integration::QMCGrid< Real, 2 > const & r2Grid,
-    ArrayView2d< Real const > const & r12Inv );
+    ArrayView3d< Real const > const & FjiSame );
 
   /**
    */
@@ -253,8 +291,7 @@ struct UOSHartreeFock
     ArrayView2d< T const > const & overlap,
     ArrayView2d< Real const > const & oneElectronTerms,
     integration::QMCGrid< Real, 3 > const & r1Grid,
-    integration::QMCGrid< Real, 2 > const & r2Grid,
-    ArrayView2d< Real const > const & r12Inv );
+    ArrayView3d< Real const > const & Fji );
 
   /**
    */
@@ -326,9 +363,8 @@ struct TCHartreeFock
     ArrayView4d< T const > const & twoElectronTermsSameSpin,
     ArrayView4d< T const > const & twoElectronTermsOppositeSpin,
     integration::QMCGrid< Real, 3 > const & r1Grid,
-    integration::QMCGrid< Real, 2 > const & r2Grid,
-    ArrayView2d< Real const > const & scalarSame,
-    ArrayView2d< Real const > const & scalarOppo,
+    ArrayView3d< Real const > const & FjiSame,
+    ArrayView3d< Real const > const & FjiOppo,
     ArrayView3d< Cartesian< T > const > const & VjiSame,
     ArrayView3d< Cartesian< T > const > const & VjiOppo );
 

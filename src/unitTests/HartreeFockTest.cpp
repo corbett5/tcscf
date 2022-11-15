@@ -485,6 +485,7 @@ void ochiHF(
 template< typename REAL >
 void precompute(
   ArrayView2d< REAL > const & fSame,
+  Array3d< REAL > & FjiSame,
   integration::QMCGrid< REAL, 3 > const & r1Grid,
   integration::QMCGrid< REAL, 2 > const & r2Grid )
 {
@@ -496,12 +497,16 @@ void precompute(
       return 1 / (r1 - r2).r();
     }
   );
+
+  FjiSame = computeF( r1Grid, r2Grid, fSame.toViewConst() );
 }
 
 template< typename REAL >
 void precomputeTranscorrelated(
   ArrayView2d< REAL > const & fSame,
   ArrayView2d< REAL > const & fOppo,
+  Array3d< REAL > & FjiSame,
+  Array3d< REAL > & FjiOppo,
   Array3d< Cartesian< std::complex< REAL > > > & VjiSame,
   Array3d< Cartesian< std::complex< REAL > > > & VjiOppo,
   jastrowFunctions::Ochi< REAL > const & u,
@@ -520,6 +525,8 @@ void precomputeTranscorrelated(
     }
   );
 
+  FjiSame = computeF( r1Grid, r2Grid, fSame.toViewConst() );
+
   precomputeIntegrand( fOppo, r1Grid, r2Grid,
     [&u] ( Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
     {
@@ -528,6 +535,8 @@ void precomputeTranscorrelated(
       return 2 / (r1 - r2).r() - dot( grad12, grad12 ) - dot( grad21, grad21 );
     }
   );
+
+  FjiOppo = computeF( r1Grid, r2Grid, fOppo.toViewConst() );
 
   Array2d< Cartesian< Real > > vectorIntegrand( r1Grid.nGrid(), r3Grid.nGrid() );
 
@@ -591,8 +600,11 @@ void ochiNewHF(
 
   Array2d< Real > scalarSame( r1Grid.nGrid(), r2Grid.nGrid() );
   Array2d< Real > scalarOppo( r1Grid.nGrid(), r2Grid.nGrid() );
-  Array3d< Cartesian< Complex > > VjiSame( r1Grid.nGrid(), nBasis, nBasis );
-  Array3d< Cartesian< Complex > > VjiOppo( r1Grid.nGrid(), nBasis, nBasis );
+  
+  Array3d< Real > FjiSame;
+  Array3d< Real > FjiOppo;
+  Array3d< Cartesian< Complex > > VjiSame;
+  Array3d< Cartesian< Complex > > VjiOppo;
   
   Real const a = 1.5;
   Real const a12 = a;
@@ -607,11 +619,11 @@ void ochiNewHF(
 
   if constexpr ( hfCalculator.needsGradients() )
   {
-    precomputeTranscorrelated( scalarSame, scalarOppo, VjiSame, VjiOppo, u, r1Grid, r2Grid, r3Grid );
+    precomputeTranscorrelated( scalarSame, scalarOppo, FjiSame, FjiOppo, VjiSame, VjiOppo, u, r1Grid, r2Grid, r3Grid );
   }
   else
   {
-    precompute( scalarSame, r1Grid, r2Grid );
+    precompute( scalarSame, FjiSame, r1Grid, r2Grid );
   }
 
   Real alpha = initialAlpha;
@@ -635,11 +647,11 @@ void ochiNewHF(
       // Array4d< Complex > const DOppo = computeDOppositeSpin( r1Grid, r2Grid, u );
       // computeH2Prime( h2PrimeOppo, h2PrimeSame, R, GOppo, DOppo );
 
-      LVARRAY_LOG_VAR( hfCalculator.compute( true, {}, coreMatrix, h2PrimeSame, h2PrimeOppo, r1Grid, r2Grid, scalarSame, scalarOppo, VjiSame, VjiOppo ) );
+      LVARRAY_LOG_VAR( hfCalculator.compute( true, {}, coreMatrix, h2PrimeSame, h2PrimeOppo, r1Grid, FjiSame, FjiOppo, VjiSame, VjiOppo ) );
     }
     else
     {
-      LVARRAY_LOG_VAR( hfCalculator.compute( true, {}, coreMatrix, r1Grid, r2Grid, scalarSame ) );
+      LVARRAY_LOG_VAR( hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame ) );
     }
 
     Real const newAlpha = std::sqrt( -2 * hfCalculator.highestOccupiedOrbitalEnergy() );

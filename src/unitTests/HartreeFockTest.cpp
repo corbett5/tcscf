@@ -378,133 +378,30 @@ void computeH2PrimeXXX(
 
 // }
 
-/**
- * 
- */
-template< typename HF_CALCULATOR >
-void ochiHF(
-  int const nMax,
-  int const lMax,
-  double const initialAlpha,
-  int const r1GridSize,
-  int const r2GridSize )
-{
-  using Real = double;
-  using Complex = std::complex< Real >;
 
-  constexpr double HF_LIMIT = -2.861679995612;
-
-  int const Z = 2;
-  int const nSpinUp = 1;
-  int const nSpinDown = 1;
-
-  Real alpha = initialAlpha;
-
-  std::vector< OchiBasisFunction< Real > > basisFunctions;
-  int const nBasis = createBasisFunctions( nMax, lMax, alpha, basisFunctions );
-
-  LVARRAY_LOG( "nMax = " << nMax << ", lMax = " << lMax << ", nBasis = " << nBasis <<
-               ", r1 grid size = " << r1GridSize << ", r2 grid size = " << r2GridSize << ", alpha = " << alpha );
-
-  integration::QuadratureGrid< Real > const coreGrid = integration::createGrid(
-    integration::ChebyshevGauss< Real >( 1000 ),
-    integration::changeOfVariables::TreutlerAhlrichsM4< Real >( 1, 0.9 ) );
-
-  HF_CALCULATOR hfCalculator( nSpinUp, nSpinDown, basisFunctions.size() );
-
-  Array1d< Real > energies;
-
-  int const nIter = 30;
-  for( int iter = 0; iter < nIter; ++iter )
-  {
-    Array2d< Real > const coreMatrix( nBasis, nBasis );
-    fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
-
-    integration::QMCGrid< Real, 3 > r1Grid( r1GridSize );
-    r1Grid.setBasisFunctions( basisFunctions, false );
-
-    integration::QMCGrid< Real, 2 > r2Grid( r2GridSize );
-    r2Grid.setBasisFunctions( basisFunctions, std::is_same_v< HF_CALCULATOR, TCHartreeFock< Complex > > );
-    
-    Array4d< Complex > R = computeR( r1Grid, r2Grid );
-  
-    std::cout << std::setprecision( 10 );
-
-    Real energy = 0;
-    if constexpr ( std::is_same_v< HF_CALCULATOR, TCHartreeFock< Complex > > )
-    {
-      Real const a = 1.5;
-      Real const a12 = a;
-      Array2d< int > S( 1, 3 );
-      S( 0, 0 ) = 1;
-
-      Array2d< Real > c( 1, 2 );
-      c( 0, false ) = a12 / 2;
-      c( 0, true ) = a12 / 4;
-
-      jastrowFunctions::Ochi< Real > const u { a, a12, c, S };
-
-      // Array4d< Complex > const LOppo = computeLOppositeSpin( r1Grid, r2Grid, u );
-      Array4d< Complex > const GOppo = computeGOppositeSpin( r1Grid, r2Grid, u );
-      Array4d< Complex > const DOppo = computeDOppositeSpin( r1Grid, r2Grid, u );
-
-      // threeElectronIntegrals( r1Grid, r1Grid, u );
-
-      Array4d< Complex > const h2PrimeOppo( nBasis, nBasis, nBasis, nBasis );
-      Array4d< Complex > const h2PrimeSame( nBasis, nBasis, nBasis, nBasis );
-
-      computeH2Prime( h2PrimeOppo, h2PrimeSame, R, GOppo, DOppo );
-
-      energy = hfCalculator.compute( true, {}, coreMatrix, h2PrimeSame, h2PrimeOppo );
-    }
-    else
-    {
-      energy = hfCalculator.compute( true, {}, coreMatrix, R );
-    }
-
-    // TODO: zero out the two electron electron terms that don't share the same angular coords.
-
-    if( nIter - iter <= 10 )
-    {
-      energies.emplace_back( energy );
-    }
-
-    alpha = std::sqrt( -2 * hfCalculator.highestOccupiedOrbitalEnergy() );
-
-    printf( "\r    iteration = %4d, energy = %10.6F, error = %e, alpha = %10.6F", iter, energy, std::abs( HF_LIMIT - energy ), alpha );
-    fflush( stdout );
-
-    createBasisFunctions( nMax, lMax, alpha, basisFunctions );
-  }
-
-  auto const [mean, standardDev] = meanAndStd( energies.toViewConst() );
-  double const error = std::abs( HF_LIMIT - mean );
-  printf( "\renergy = %.6F +/- %.2e Ht, error = %.2e Ht, alpha = %.6F                     \n", mean, standardDev, error, alpha );
-}
 
 template< typename REAL >
 void precompute(
-  ArrayView2d< REAL > const & fSame,
   Array3d< REAL > & FjiSame,
   integration::QMCGrid< REAL, 3 > const & r1Grid,
   integration::QMCGrid< REAL, 2 > const & r2Grid )
 {
   using Real = REAL;
 
-  precomputeIntegrand( fSame, r1Grid, r2Grid,
+  Array2d< Real > scalarIntegrand( r1Grid.nGrid(), r2Grid.nGrid() );
+
+  precomputeIntegrand( scalarIntegrand, r1Grid, r2Grid,
     [] (Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
     {
       return 1 / (r1 - r2).r();
     }
   );
 
-  FjiSame = computeF( r1Grid, r2Grid, fSame.toViewConst() );
+  FjiSame = computeF( r1Grid, r2Grid, scalarIntegrand.toViewConst() );
 }
 
 template< typename REAL >
 void precomputeTranscorrelated(
-  ArrayView2d< REAL > const & fSame,
-  ArrayView2d< REAL > const & fOppo,
   Array3d< REAL > & FjiSame,
   Array3d< REAL > & FjiOppo,
   Array3d< Cartesian< std::complex< REAL > > > & VjiSame,
@@ -516,7 +413,9 @@ void precomputeTranscorrelated(
 {
   using Real = REAL;
 
-  precomputeIntegrand( fSame, r1Grid, r2Grid,
+  Array2d< Real > scalarIntegrand( r1Grid.nGrid(), r2Grid.nGrid() );
+
+  precomputeIntegrand( scalarIntegrand, r1Grid, r2Grid,
     [&u] ( Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
     {
       Cartesian< Real > const grad12 = u.gradient( r1, r2, true );
@@ -525,9 +424,9 @@ void precomputeTranscorrelated(
     }
   );
 
-  FjiSame = computeF( r1Grid, r2Grid, fSame.toViewConst() );
+  FjiSame = computeF( r1Grid, r2Grid, scalarIntegrand.toViewConst() );
 
-  precomputeIntegrand( fOppo, r1Grid, r2Grid,
+  precomputeIntegrand( scalarIntegrand, r1Grid, r2Grid,
     [&u] ( Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
     {
       Cartesian< Real > const grad12 = u.gradient( r1, r2, false );
@@ -536,7 +435,7 @@ void precomputeTranscorrelated(
     }
   );
 
-  FjiOppo = computeF( r1Grid, r2Grid, fOppo.toViewConst() );
+  FjiOppo = computeF( r1Grid, r2Grid, scalarIntegrand.toViewConst() );
 
   Array2d< Cartesian< Real > > vectorIntegrand( r1Grid.nGrid(), r3Grid.nGrid() );
 
@@ -588,18 +487,6 @@ void ochiNewHF(
   integration::QuadratureGrid< Real > const coreGrid = integration::createGrid(
     integration::ChebyshevGauss< Real >( 1000 ),
     integration::changeOfVariables::TreutlerAhlrichsM4< Real >( 1, 0.9 ) );
-
-  integration::QMCGrid< Real, 3 > r1Grid( r1GridSize );
-  r1Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
-
-  integration::QMCGrid< Real, 3 > r3Grid( r1GridSize );
-  r3Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
-  
-  integration::QMCGrid< Real, 2 > r2Grid( r2GridSize );
-  r2Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
-
-  Array2d< Real > scalarSame( r1Grid.nGrid(), r2Grid.nGrid() );
-  Array2d< Real > scalarOppo( r1Grid.nGrid(), r2Grid.nGrid() );
   
   Array3d< Real > FjiSame;
   Array3d< Real > FjiOppo;
@@ -616,114 +503,103 @@ void ochiNewHF(
   c( 0, true ) = a12 / 4;
 
   jastrowFunctions::Ochi< Real > const u { a, a12, c, S };
-
-  if constexpr ( hfCalculator.needsGradients() )
-  {
-    precomputeTranscorrelated( scalarSame, scalarOppo, FjiSame, FjiOppo, VjiSame, VjiOppo, u, r1Grid, r2Grid, r3Grid );
-  }
-  else
-  {
-    precompute( scalarSame, FjiSame, r1Grid, r2Grid );
-  }
-
+  
   Real alpha = initialAlpha;
   bool converged = false;
   int const maxIter = 30;
   int iter = 0;
-  for( iter = 0; iter < maxIter; ++iter )
   {
-    createBasisFunctions( nMax, lMax, alpha, basisFunctions );
+    integration::QMCGrid< Real, 3 > r1Grid( r1GridSize );
+    r1Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
 
-    Array2d< Real > const coreMatrix( nBasis, nBasis );
-    fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
+    integration::QMCGrid< Real, 3 > r3Grid( r1GridSize );
+    r3Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
+    
+    integration::QMCGrid< Real, 2 > r2Grid( r2GridSize );
+    r2Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
 
     if constexpr ( hfCalculator.needsGradients() )
     {
-      Array4d< Complex > const h2PrimeOppo( nBasis, nBasis, nBasis, nBasis );
-      Array4d< Complex > const h2PrimeSame( nBasis, nBasis, nBasis, nBasis );
-
-      // Array4d< Complex > R = computeR( r1Grid, r2Grid );
-      // Array4d< Complex > const GOppo = computeGOppositeSpin( r1Grid, r2Grid, u );
-      // Array4d< Complex > const DOppo = computeDOppositeSpin( r1Grid, r2Grid, u );
-      // computeH2Prime( h2PrimeOppo, h2PrimeSame, R, GOppo, DOppo );
-
-      LVARRAY_LOG_VAR( hfCalculator.compute( true, {}, coreMatrix, h2PrimeSame, h2PrimeOppo, r1Grid, FjiSame, FjiOppo, VjiSame, VjiOppo ) );
+      precomputeTranscorrelated( FjiSame, FjiOppo, VjiSame, VjiOppo, u, r1Grid, r2Grid, r3Grid );
     }
     else
     {
-      LVARRAY_LOG_VAR( hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame ) );
+      precompute( FjiSame, r1Grid, r2Grid );
     }
 
-    Real const newAlpha = std::sqrt( -2 * hfCalculator.highestOccupiedOrbitalEnergy() );
-    LVARRAY_LOG_VAR( newAlpha );
-
-    if( LOG_LEVEL > 1 )
+    
+    for( iter = 0; iter < maxIter; ++iter )
     {
-      LVARRAY_LOG( "\t\t number of loops to SCF convergence = " << hfCalculator.numberOfConvergenceLoops() );
-    }
+      createBasisFunctions( nMax, lMax, alpha, basisFunctions );
 
-    if( std::abs( newAlpha - alpha ) < 1e-6 )
-    {
-      converged = true;
-      break;
-    }
+      Array2d< Real > const coreMatrix( nBasis, nBasis );
+      fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
 
-    alpha = newAlpha;
+      if constexpr ( hfCalculator.needsGradients() )
+      {
+        hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame, FjiOppo, VjiSame, VjiOppo );
+      }
+      else
+      {
+        hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame );
+      }
+
+      Real const newAlpha = std::sqrt( -2 * hfCalculator.highestOccupiedOrbitalEnergy() );
+
+      if( LOG_LEVEL > 1 )
+      {
+        LVARRAY_LOG( "\t\t number of loops to SCF convergence = " << hfCalculator.numberOfConvergenceLoops() );
+      }
+
+      if( std::abs( newAlpha - alpha ) < 1e-6 )
+      {
+        converged = true;
+        break;
+      }
+
+      alpha = newAlpha;
+    }
   }
 
   LVARRAY_ERROR_IF( !converged, "Did not converge." );
 
-  // createBasisFunctions( nMax, lMax, alpha, basisFunctions );
+  createBasisFunctions( nMax, lMax, alpha, basisFunctions );
 
-  // Array2d< Real > const coreMatrix( nBasis, nBasis );
-  // fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
+  Array2d< Real > const coreMatrix( nBasis, nBasis );
+  fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
 
-  // Array1d< Real > energies;
-  // for( int errorIter = 0; errorIter < 10; ++errorIter )
-  // {
-  //   integration::QMCGrid< Real, 3 > newR1Grid( r1GridSize );
-  //   newR1Grid.setBasisFunctions( basisFunctions, false );
+  Array1d< Real > energies;
+  for( int errorIter = 0; errorIter < 10; ++errorIter )
+  {
+    integration::QMCGrid< Real, 3 > r1Grid( r1GridSize );
+    r1Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
+
+    integration::QMCGrid< Real, 3 > r3Grid( r1GridSize );
+    r3Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
     
-  //   integration::QMCGrid< Real, 2 > newR2Grid( r2GridSize );
-  //   newR2Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
+    integration::QMCGrid< Real, 2 > r2Grid( r2GridSize );
+    r2Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
 
-  //   precomputeIntegrand( scalarIntegrand.toView(), newR1Grid, newR2Grid,
-  //     [] (Cartesian< Real > const & r1, Cartesian< Real > const & r2 )
-  //     {
-  //       return 1 / (r1 - r2).r();
-  //     }
-  //   );
+    if constexpr ( hfCalculator.needsGradients() )
+    {
+      precomputeTranscorrelated( FjiSame, FjiOppo, VjiSame, VjiOppo, u, r1Grid, r2Grid, r3Grid );
+      energies.emplace_back( hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame, FjiOppo, VjiSame, VjiOppo ) );
+    }
+    else
+    {
+      precompute( FjiSame, r1Grid, r2Grid );
+      energies.emplace_back( hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame ) );
+    }
+  }
 
-  //   energies.emplace_back( hfCalculator.compute( true, {}, coreMatrix, newR1Grid, newR2Grid, scalarIntegrand ) );
-  // }
-
-  // constexpr Real HF_LIMIT = -2.861679995612;
-  // auto const [mean, standardDev] = meanAndStd( energies.toViewConst() );
-  // double const error = std::abs( HF_LIMIT - mean );
-  // printf( "energy = %.6F +/- %.2e Ht, error = %.2e Ht, alpha = %.6F, number of alpha iterations = %d\n", mean, standardDev, error, alpha, iter + 1 );
+  constexpr Real HF_LIMIT = -2.861679995612;
+  auto const [mean, standardDev] = meanAndStd( energies.toViewConst() );
+  double const error = std::abs( HF_LIMIT - mean );
+  printf( "energy = %.6F +/- %.2e Ht, error = %.2e Ht, alpha = %.6F, number of alpha iterations = %d\n", mean, standardDev, error, alpha, iter + 1 );
 }
 
 
-TEST( HartreeFock, RestrictedClosedShell )
-{
-  TCSCF_MARK_SCOPE( "Restricted closed shell" );
 
-  ochiHF< RCSHartreeFock< std::complex< double > > >( clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
-}
-
-TEST( HartreeFock, UnrestrictedOpenShell )
-{
-  TCSCF_MARK_SCOPE( "Unrestricted Open Shell" );
-
-  ochiHF< UOSHartreeFock< std::complex< double > > >( clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
-}
-
-TEST( HartreeFock, Transcorrelated )
-{
-  TCSCF_MARK_SCOPE( "Transcorrelated" );
-
-  ochiHF< TCHartreeFock< std::complex< double > > >( clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
-}
 
 TEST( NewHartreeFock, RestrictedClosedShell )
 {

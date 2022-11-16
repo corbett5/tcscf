@@ -36,18 +36,6 @@ void precomputeIntegrand(
       {
         Cartesian< REAL > const r2 { r2Points( 0, r2Idx ), 0, r2Points( 1, r2Idx ) };
         values( r1Idx, r2Idx ) = f( r1, r2 ) * (r1Weights[ r1Idx ] * r2Weights[ r2Idx ]);
-        
-        // T const diff = f( r2, r1 ) - f( r1, r2 );
-        // if constexpr ( std::is_same_v< T, double > )
-        // {
-        //   LVARRAY_ERROR_IF_GT( std::abs( diff ), 1e-10 );
-        // }
-        // else
-        // {
-        //   LVARRAY_ERROR_IF_GT( std::abs( diff.x() ), 1e-10 );
-        //   LVARRAY_ERROR_IF_GT( std::abs( diff.y() ), 1e-10 );
-        //   LVARRAY_ERROR_IF_GT( std::abs( diff.z() ), 1e-10 );
-        // }
       }
     }
   );
@@ -116,7 +104,7 @@ Array3d< REAL > computeF(
     {
       for( IndexType j = 0; j < nBasis; ++j )
       {
-        for( IndexType i = 0; i < nBasis; ++i )
+        for( IndexType i = j; i < nBasis; ++i )
         {
           Real answer {};
           for( IndexType r2Idx = 0; r2Idx < nGridR2; ++r2Idx )
@@ -125,6 +113,7 @@ Array3d< REAL > computeF(
           }
 
           F( r1Idx, j, i ) = 2 * pi< Real > * answer;
+          F( r1Idx, i, j ) = conj( 2 * pi< Real > * answer );
         }
       }
     }
@@ -163,7 +152,7 @@ Array3d< Cartesian< std::complex< REAL > > > computeV(
     {
       for( IndexType j = 0; j < nBasis; ++j )
       {
-        for( IndexType i = 0; i < nBasis; ++i )
+        for( IndexType i = j; i < nBasis; ++i )
         {
           Cartesian< Complex > answer {};
           for( IndexType r2Idx = 0; r2Idx < nGridR2; ++r2Idx )
@@ -173,6 +162,7 @@ Array3d< Cartesian< std::complex< REAL > > > computeV(
           }
 
           V( r1Idx, j, i ) = answer;
+          V( r1Idx, i, j ) = { conj( answer.x() ), conj( answer.y() ), conj( answer.z() ) };
         }
       }
     }
@@ -227,14 +217,6 @@ struct RCSHartreeFock
     integration::QMCGrid< Real, 3 > const & r1Grid,
     ArrayView3d< Real const > const & FjiSame );
 
-  /**
-   */
-  Real compute(
-    bool const orthogonal,
-    ArrayView2d< T const > const & overlap,
-    ArrayView2d< Real const > const & oneElectronTerms,
-    ArrayView4d< T const > const & twoElectronTerms );
-  
   /**
    */
   Real highestOccupiedOrbitalEnergy() const
@@ -295,14 +277,6 @@ struct UOSHartreeFock
 
   /**
    */
-  Real compute(
-    bool const orthogonal,
-    ArrayView2d< T const > const & overlap,
-    ArrayView2d< Real const > const & oneElectronTerms,
-    ArrayView4d< T const > const & twoElectronTerms );
-
-  /**
-   */
   Real highestOccupiedOrbitalEnergy() const
   { 
     return std::max( eigenvalues( 0, nElectrons[ 0 ] - 1 ), eigenvalues( 1, nElectrons[ 1 ] - 1 ) );
@@ -360,22 +334,11 @@ struct TCHartreeFock
     bool const orthogonal,
     ArrayView2d< T const > const & overlap,
     ArrayView2d< Real const > const & oneElectronTerms,
-    ArrayView4d< T const > const & twoElectronTermsSameSpin,
-    ArrayView4d< T const > const & twoElectronTermsOppositeSpin,
     integration::QMCGrid< Real, 3 > const & r1Grid,
     ArrayView3d< Real const > const & FjiSame,
     ArrayView3d< Real const > const & FjiOppo,
     ArrayView3d< Cartesian< T > const > const & VjiSame,
     ArrayView3d< Cartesian< T > const > const & VjiOppo );
-
-  /**
-   */
-  Real compute(
-    bool const orthogonal,
-    ArrayView2d< T const > const & overlap,
-    ArrayView2d< Real const > const & oneElectronTerms,
-    ArrayView4d< T const > const & twoElectronTermsSameSpin,
-    ArrayView4d< T const > const & twoElectronTermsOppositeSpin );
 
   /**
    */
@@ -394,24 +357,6 @@ struct TCHartreeFock
   CArray< Array2d< Complex, RAJA::PERM_JI >, 2 > occupiedOrbitals;
 
 private:
-
-  /**
-   */
-  void constructFockOperator(
-    ArrayView2d< Real const > const & oneElectronTerms,
-    ArrayView4d< T const > const & twoElectronTermsSameSpin,
-    ArrayView4d< T const > const & twoElectronTermsOppositeSpin );
-  
-  /**
-   */
-  T calculateEnergy(
-    ArrayView2d< Real const > const & oneElectronTerms,
-    ArrayView4d< T const > const & twoElectronTermsSameSpin,
-    ArrayView4d< T const > const & twoElectronTermsOppositeSpin ) const;
-
-  /**
-   */
-  void getNewDensity();
 
   int _iter = 0;
   LvArray::dense::ArrayWorkspace< Complex, LvArray::ChaiBuffer > _workspace;

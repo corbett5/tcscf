@@ -233,6 +233,14 @@ struct Cartesian
   constexpr REAL phi() const
   { return std::atan2( _y, _x ); }
 
+  constexpr Cartesian & operator+=( Cartesian const & other )
+  {
+    _x += other._x;
+    _y += other._y;
+    _z += other._z;
+    return *this;
+  }
+
   constexpr Cartesian operator+( Cartesian const & other ) const
   {
     return { _x + other._x, _y + other._y, _z + other._z };

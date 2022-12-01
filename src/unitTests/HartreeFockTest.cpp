@@ -510,37 +510,29 @@ void ochiNewHF(
   int iter = 0;
   {
     integration::QMCGrid< Real, 3 > r1Grid( r1GridSize );
-    r1Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
-
     integration::QMCGrid< Real, 3 > r3Grid( r1GridSize );
-    r3Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
-    
     integration::QMCGrid< Real, 2 > r2Grid( r2GridSize );
-    r2Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
 
-    if constexpr ( hfCalculator.needsGradients() )
-    {
-      precomputeTranscorrelated( FjiSame, FjiOppo, VjiSame, VjiOppo, u, r1Grid, r2Grid, r3Grid );
-    }
-    else
-    {
-      precompute( FjiSame, r1Grid, r2Grid );
-    }
-
-    
     for( iter = 0; iter < maxIter; ++iter )
     {
       createBasisFunctions( nMax, lMax, alpha, basisFunctions );
+
+      r1Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
+      r3Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
+      r2Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
 
       Array2d< Real > const coreMatrix( nBasis, nBasis );
       fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
 
       if constexpr ( hfCalculator.needsGradients() )
       {
-        hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame, FjiOppo, VjiSame, VjiOppo );
+        precomputeTranscorrelated( FjiSame, FjiOppo, VjiSame, VjiOppo, u, r1Grid, r2Grid, r3Grid );
+        auto energy = hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame, FjiOppo, VjiSame, VjiOppo, basisFunctions );
+        LVARRAY_LOG_VAR( energy );
       }
       else
       {
+        precompute( FjiSame, r1Grid, r2Grid );
         hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame );
       }
 
@@ -558,6 +550,7 @@ void ochiNewHF(
       }
 
       alpha = newAlpha;
+      abort();
     }
   }
 
@@ -572,18 +565,18 @@ void ochiNewHF(
   for( int errorIter = 0; errorIter < 10; ++errorIter )
   {
     integration::QMCGrid< Real, 3 > r1Grid( r1GridSize );
-    r1Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
-
     integration::QMCGrid< Real, 3 > r3Grid( r1GridSize );
-    r3Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
-    
     integration::QMCGrid< Real, 2 > r2Grid( r2GridSize );
+    
+    r1Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
+    r3Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
     r2Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
 
     if constexpr ( hfCalculator.needsGradients() )
     {
       precomputeTranscorrelated( FjiSame, FjiOppo, VjiSame, VjiOppo, u, r1Grid, r2Grid, r3Grid );
-      energies.emplace_back( hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame, FjiOppo, VjiSame, VjiOppo ) );
+      energies.emplace_back( hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame, FjiOppo, VjiSame, VjiOppo, basisFunctions ) );
+      LVARRAY_LOG_VAR( energies.back() );
     }
     else
     {

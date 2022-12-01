@@ -233,6 +233,9 @@ struct Cartesian
   constexpr REAL phi() const
   { return std::atan2( _y, _x ); }
 
+  constexpr RealType< REAL > norm() const
+  { return std::norm( _x ) + std::norm( _y ) + std::norm( _z ); }
+
   constexpr Cartesian & operator+=( Cartesian const & other )
   {
     _x += other._x;
@@ -269,6 +272,10 @@ struct Cartesian
   REAL _z;
 };
 
+
+template< typename T >
+constexpr Cartesian< T > conj( Cartesian< T > const & value )
+{ return { conj( value.x() ), conj( value.y() ), conj( value.z() ) }; }
 
 template< typename T, typename U >
 auto dot( Cartesian< T > const & v1, Cartesian< U > const & v2 )

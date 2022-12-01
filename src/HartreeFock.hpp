@@ -5,6 +5,18 @@
 
 #include "dense/common.hpp"
 
+
+
+
+
+#include "OchiBasis.hpp"
+
+
+
+
+
+
+
 namespace tcscf
 {
 
@@ -23,7 +35,6 @@ void precomputeIntegrand(
   LVARRAY_ERROR_IF_NE( values.size( 1 ), r2Grid.nGrid() );
 
   ArrayView2d< REAL const > const r1Points = r1Grid.quadratureGrid.points.toViewConst();
-  ArrayView1d< REAL const > const r1Weights = r1Grid.quadratureGrid.weights.toViewConst();
 
   ArrayView2d< REAL const > const r2Points = r2Grid.quadratureGrid.points.toViewConst();
   ArrayView1d< REAL const > const r2Weights = r2Grid.quadratureGrid.weights.toViewConst();
@@ -35,7 +46,7 @@ void precomputeIntegrand(
       for( IndexType r2Idx = 0; r2Idx < r2Points.size( 1 ); ++r2Idx )
       {
         Cartesian< REAL > const r2 { r2Points( 0, r2Idx ), 0, r2Points( 1, r2Idx ) };
-        values( r1Idx, r2Idx ) = f( r1, r2 ) * (r1Weights[ r1Idx ] * r2Weights[ r2Idx ]);
+        values( r1Idx, r2Idx ) = f( r1, r2 ) * r2Weights[ r2Idx ];
       }
     }
   );
@@ -56,7 +67,6 @@ void precomputeIntegrand(
   LVARRAY_ERROR_IF_NE( values.size( 1 ), r2Grid.nGrid() );
 
   ArrayView2d< REAL const > const r1Points = r1Grid.quadratureGrid.points.toViewConst();
-  ArrayView1d< REAL const > const r1Weights = r1Grid.quadratureGrid.weights.toViewConst();
 
   ArrayView2d< REAL const > const r2Points = r2Grid.quadratureGrid.points.toViewConst();
   ArrayView1d< REAL const > const r2Weights = r2Grid.quadratureGrid.weights.toViewConst();
@@ -68,7 +78,7 @@ void precomputeIntegrand(
       for( IndexType r2Idx = 0; r2Idx < r2Points.size( 1 ); ++r2Idx )
       {
         Cartesian< REAL > const r2 { r2Points( 0, r2Idx ), r2Points( 1, r2Idx ), r2Points( 2, r2Idx ) };
-        values( r1Idx, r2Idx ) = f( r1, r2 ) * (r1Weights[ r1Idx ] * r2Weights[ r2Idx ]);
+        values( r1Idx, r2Idx ) = f( r1, r2 ) * r2Weights[ r2Idx ];
       }
     }
   );
@@ -338,7 +348,8 @@ struct TCHartreeFock
     ArrayView3d< Real const > const & FjiSame,
     ArrayView3d< Real const > const & FjiOppo,
     ArrayView3d< Cartesian< T > const > const & VjiSame,
-    ArrayView3d< Cartesian< T > const > const & VjiOppo );
+    ArrayView3d< Cartesian< T > const > const & VjiOppo,
+    std::vector< OchiBasisFunction< Real > > const & basisFunctions );
 
   /**
    */

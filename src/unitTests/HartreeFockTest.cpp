@@ -533,7 +533,7 @@ void ochiNewHF(
       else
       {
         precompute( FjiSame, r1Grid, r2Grid );
-        hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame );
+        hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame, basisFunctions );
       }
 
       Real const newAlpha = std::sqrt( -2 * hfCalculator.highestOccupiedOrbitalEnergy() );
@@ -550,7 +550,6 @@ void ochiNewHF(
       }
 
       alpha = newAlpha;
-      abort();
     }
   }
 
@@ -581,7 +580,7 @@ void ochiNewHF(
     else
     {
       precompute( FjiSame, r1Grid, r2Grid );
-      energies.emplace_back( hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame ) );
+      energies.emplace_back( hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame, basisFunctions ) );
     }
   }
 

@@ -7,6 +7,28 @@
 
 #include "dense/eigenDecomposition.hpp"
 
+
+#define CHECK_BOUNDS_1( array, size0 ) \
+  LVARRAY_ERROR_IF_NE( array.size( 0 ), size0 )
+
+#define CHECK_BOUNDS_2( array, size0, size1 ) \
+  LVARRAY_ERROR_IF_NE( array.size( 0 ), size0 ); \
+  LVARRAY_ERROR_IF_NE( array.size( 1 ), size1 )
+
+#define CHECK_BOUNDS_3( array, size0, size1, size2 ) \
+  LVARRAY_ERROR_IF_NE( array.size( 0 ), size0 ); \
+  LVARRAY_ERROR_IF_NE( array.size( 1 ), size1 ); \
+  LVARRAY_ERROR_IF_NE( array.size( 2 ), size2 )
+
+#define CHECK_BOUNDS_6( array, size0, size1, size2, size3, size4, size5 ) \
+  LVARRAY_ERROR_IF_NE( array.size( 0 ), size0 ); \
+  LVARRAY_ERROR_IF_NE( array.size( 1 ), size1 ); \
+  LVARRAY_ERROR_IF_NE( array.size( 2 ), size2 ); \
+  LVARRAY_ERROR_IF_NE( array.size( 3 ), size3 ); \
+  LVARRAY_ERROR_IF_NE( array.size( 4 ), size4 ); \
+  LVARRAY_ERROR_IF_NE( array.size( 5 ), size5 )
+
+
 namespace tcscf
 {
 
@@ -43,34 +65,7 @@ void getNewDensity(
 }
 
 /**
- * TODO: replace with PossibleAliases
  */
-template< typename T, typename U >
-T calculateEnergy( 
-  ArraySlice2d< T const, 0 > const & fockOperatorSpinUp,
-  ArraySlice2d< T const, 0 > const & fockOperatorSpinDown,
-  ArraySlice2d< T const > const & densitySpinUp,
-  ArraySlice2d< T const > const & densitySpinDown,
-  ArraySlice2d< U const > const & oneElectronTerms )
-{
-  TCSCF_MARK_FUNCTION;
-
-  IndexType const basisSize = fockOperatorSpinUp.size( 0 );
-
-  T energy = 0;
-  for( int u = 0; u < basisSize; ++u )
-  {
-    for( int v = 0; v < basisSize; ++v )
-    {
-      energy += densitySpinUp( v, u ) * (oneElectronTerms( u, v ) + fockOperatorSpinUp( u, v )) +
-                densitySpinDown( v, u ) * (oneElectronTerms( u, v ) + fockOperatorSpinDown( u, v ));
-    }
-  }
-
-  return energy / 2;
-}
-
-
 template< typename T, typename U >
 T constructSCFOperator(
   ArrayView3d< T, 1 > const & scfOperator,
@@ -83,60 +78,48 @@ T constructSCFOperator(
 
   IndexType const nBasis = scfOperator.size( 1 );
 
-  LVARRAY_ERROR_IF_NE( scfOperator.size( 0 ), 2 );
-  LVARRAY_ERROR_IF_NE( scfOperator.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( scfOperator.size( 2 ), nBasis );
+  int const nSpin = scfOperator.size( 0 );
+  LVARRAY_ERROR_IF( nSpin != 1 && nSpin != 2, "Uh oh" );
 
-  LVARRAY_ERROR_IF_NE( oneElectronTerms.size( 0 ), nBasis );
-  LVARRAY_ERROR_IF_NE( oneElectronTerms.size( 1 ), nBasis );
+  CHECK_BOUNDS_3( scfOperator, nSpin, nBasis, nBasis );
+  CHECK_BOUNDS_2( oneElectronTerms, nBasis, nBasis );
+  CHECK_BOUNDS_3( twoElectronTerms, nSpin, nBasis, nBasis );
 
-  LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 0 ), 2 );
-  LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( twoElectronTerms.size( 2 ), nBasis );
+  if( !threeElectronTerms.empty() )
+  {
+    CHECK_BOUNDS_3( threeElectronTerms, nSpin, nBasis, nBasis );
+  }
 
-  LVARRAY_ERROR_IF_NE( threeElectronTerms.size( 0 ), 2 );
-  LVARRAY_ERROR_IF_NE( threeElectronTerms.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( threeElectronTerms.size( 2 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( density.size( 0 ), 2 );
-  LVARRAY_ERROR_IF_NE( density.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( density.size( 2 ), nBasis );
+  CHECK_BOUNDS_3( density, nSpin, nBasis, nBasis );
 
   RAJA::ReduceSum< Reduce< ParallelHost >, T > energy( 0 );
-  RAJA::ReduceSum< Reduce< ParallelHost >, T > energyThreeTermsP( 0 );
-  RAJA::ReduceSum< Reduce< ParallelHost >, T > energyThreeTermsM( 0 );
   forAll< DefaultPolicy< ParallelHost > >( nBasis * nBasis,
     [=] ( IndexType const ji )
     {
       IndexType const j = ji / nBasis;
       IndexType const i = ji % nBasis;
     
-      for( int spin = 0; spin < 2; ++spin )
+      for( int spin = 0; spin < nSpin; ++spin )
       {
-        scfOperator( spin, j, i ) = oneElectronTerms( j, i ) + twoElectronTerms( spin, j, i ); // - threeElectronTerms( spin, j, i );
-        energy += density( spin, i, j ) * (oneElectronTerms( j, i ) + twoElectronTerms( spin, j, i ) / 2 - threeElectronTerms( spin, j, i ) / 3);
-        
-        T const threeContrib = -density( spin, i, j ) * threeElectronTerms( spin, j, i ) / 3;
-        if( threeContrib.real() < 0 )
+        scfOperator( spin, j, i ) = oneElectronTerms( j, i ) + twoElectronTerms( spin, j, i );
+
+        T energyContrib = oneElectronTerms( j, i ) + twoElectronTerms( spin, j, i ) / 2;
+        if( !threeElectronTerms.empty() )
         {
-          energyThreeTermsM += threeContrib;
+          scfOperator( spin, j, i ) -= threeElectronTerms( spin, j, i );
+          energyContrib -= threeElectronTerms( spin, j, i ) / 3;
         }
-        else
-        {
-          energyThreeTermsP += threeContrib;
-        }
-      }
+
+        energy += density( spin, i, j ) * energyContrib;
+      }  
     }
   );
 
-  auto const e3p = energyThreeTermsP.get().real();
-  auto const e3m = energyThreeTermsM.get().real();
-  auto const e3 = e3p + e3m;
-  LVARRAY_LOG( "energy = " << energy.get().real() << ", e3 = " << e3 << ", e3+ = " << e3p << ", e3- = " << e3m );
   return energy.get();
 }
 
-
+/**
+ */
 template< typename T >
 void calculateScaledGradients(
   ArraySlice1d< Cartesian< T > > const & scaledGradients,
@@ -144,19 +127,15 @@ void calculateScaledGradients(
   ArrayView2d< Cartesian< T > const > const & r1BasisGradients,
   ArraySlice2d< T const > const & density )
 {
-  TCSCF_MARK_SCOPE( "calculateScaledGradients" );
+  TCSCF_MARK_FUNCTION;
 
   IndexType const nGridR1 = scaledGradients.size( 0 );
   IndexType const nBasis = r1BasisValues.size( 1 );
 
-  LVARRAY_ERROR_IF_NE( r1BasisValues.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( r1BasisValues.size( 1 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( r1BasisGradients.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( r1BasisGradients.size( 1 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( density.size( 0 ), nBasis );
-  LVARRAY_ERROR_IF_NE( density.size( 1 ), nBasis );
+  CHECK_BOUNDS_1( scaledGradients, nGridR1 );
+  CHECK_BOUNDS_2( r1BasisValues, nGridR1, nBasis );
+  CHECK_BOUNDS_2( r1BasisGradients, nGridR1, nBasis );
+  CHECK_BOUNDS_2( density, nBasis, nBasis );
 
   forAll< DefaultPolicy< ParallelHost > >( nGridR1,
     [=] ( IndexType const r1Idx )
@@ -175,7 +154,8 @@ void calculateScaledGradients(
   );
 }
 
-
+/**
+ */
 template< typename T, int USD, typename U >
 void calculateFai(
   ArraySlice2d< T, USD > const & Fai,
@@ -183,20 +163,15 @@ void calculateFai(
   ArrayView2d< T const > const & r1BasisValues,
   ArraySlice2d< T const > const & density )
 {
-  TCSCF_MARK_SCOPE( "calculateFai" );
+  TCSCF_MARK_FUNCTION;
   
   IndexType const nGridR1 = Fai.size( 0 );
   IndexType const nBasis = Fai.size( 1 );
 
-  LVARRAY_ERROR_IF_NE( Fji.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( Fji.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( Fji.size( 2 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( r1BasisValues.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( r1BasisValues.size( 1 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( density.size( 0 ), nBasis );
-  LVARRAY_ERROR_IF_NE( density.size( 1 ), nBasis );
+  CHECK_BOUNDS_2( Fai, nGridR1, nBasis );
+  CHECK_BOUNDS_3( Fji, nGridR1, nBasis, nBasis );
+  CHECK_BOUNDS_2( r1BasisValues, nGridR1, nBasis );
+  CHECK_BOUNDS_2( density, nBasis, nBasis );
 
   forAll< DefaultPolicy< ParallelHost > >( nGridR1,
     [=] ( IndexType const r1Idx )
@@ -218,27 +193,22 @@ void calculateFai(
   );
 }
 
-
+/**
+ */
 template< typename U, typename V, typename T >
 void calculateIaa(
   ArraySlice1d< U > const & Iaa,
   ArrayView3d< V const > const & Iji,
   ArraySlice2d< T const > const & density )
 {
-  TCSCF_MARK_SCOPE( "calculateIaa" );
+  TCSCF_MARK_FUNCTION;
   
   IndexType const nGridR1 = Iaa.size();
   IndexType const nBasis = Iji.size( 1 );
 
-  LVARRAY_ERROR_IF_NE( Iaa.size(), nGridR1 );
-
-  LVARRAY_ERROR_IF_NE( Iji.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( Iji.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( Iji.size( 2 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( density.size( 0 ), nBasis );
-  LVARRAY_ERROR_IF_NE( density.size( 1 ), nBasis );
-
+  CHECK_BOUNDS_1( Iaa, nGridR1 );
+  CHECK_BOUNDS_3( Iji, nGridR1, nBasis, nBasis );
+  CHECK_BOUNDS_2( density, nBasis, nBasis );
 
   forAll< DefaultPolicy< ParallelHost > >( nGridR1,
     [=] ( IndexType const r1Idx )
@@ -257,7 +227,8 @@ void calculateIaa(
   );
 }
 
-
+/**
+ */
 template< typename T >
 void calculateVai(
   ArraySlice2d< T > const & Vai,
@@ -265,23 +236,15 @@ void calculateVai(
   ArrayView2d< Cartesian< T > const > const & r1BasisGradients,
   ArraySlice2d< T const > const & density )
 {
-  TCSCF_MARK_SCOPE( "calculateVai" );
+  TCSCF_MARK_FUNCTION;
 
   IndexType const nGridR1 = Vai.size( 0 );
   IndexType const nBasis = Vai.size( 1 );
 
-  LVARRAY_ERROR_IF_NE( Vai.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( Vai.size( 1 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( Vji.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( Vji.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( Vji.size( 2 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( r1BasisGradients.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( r1BasisGradients.size( 1 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( density.size( 0 ), nBasis );
-  LVARRAY_ERROR_IF_NE( density.size( 1 ), nBasis );
+  CHECK_BOUNDS_2( Vai, nGridR1, nBasis );
+  CHECK_BOUNDS_3( Vji, nGridR1, nBasis, nBasis );
+  CHECK_BOUNDS_2( r1BasisGradients, nGridR1, nBasis );
+  CHECK_BOUNDS_2( density, nBasis, nBasis );
 
   forAll< DefaultPolicy< ParallelHost > >( nGridR1,
     [=] ( IndexType const r1Idx )
@@ -303,7 +266,8 @@ void calculateVai(
   );
 }
 
-
+/**
+ */
 template< typename T >
 void calculateVja(
   ArraySlice2d< Cartesian< T > > const & Vja,
@@ -311,23 +275,15 @@ void calculateVja(
   ArrayView2d< T const > const & r1BasisValues,
   ArraySlice2d< T const > const & density )
 {
-  TCSCF_MARK_SCOPE( "calculateVja" );
+  TCSCF_MARK_FUNCTION;
 
   IndexType const nGridR1 = Vja.size( 0 );
   IndexType const nBasis = Vja.size( 1 );
 
-  LVARRAY_ERROR_IF_NE( Vja.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( Vja.size( 1 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( Vji.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( Vji.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( Vji.size( 2 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( r1BasisValues.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( r1BasisValues.size( 1 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( density.size( 0 ), nBasis );
-  LVARRAY_ERROR_IF_NE( density.size( 1 ), nBasis );
+  CHECK_BOUNDS_2( Vja, nGridR1, nBasis );
+  CHECK_BOUNDS_3( Vji, nGridR1, nBasis, nBasis );
+  CHECK_BOUNDS_2( r1BasisValues, nGridR1, nBasis );
+  CHECK_BOUNDS_2( density, nBasis, nBasis );
 
   forAll< DefaultPolicy< ParallelHost > >( nGridR1,
     [=] ( IndexType const r1Idx )
@@ -349,7 +305,8 @@ void calculateVja(
   );
 }
 
-
+/**
+ */
 template< typename T >
 void calculateVjb(
   ArrayView3d< Cartesian< T > > const & VjbSame,
@@ -364,24 +321,11 @@ void calculateVjb(
   IndexType const nBasis = VjbSame.size( 1 );
   IndexType const nOccupied = VjbSame.size( 2 );
 
-  LVARRAY_ERROR_IF_NE( VjbSame.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( VjbSame.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( VjbSame.size( 2 ), nOccupied );
-
-  LVARRAY_ERROR_IF_NE( VjbOppo.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( VjbOppo.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( VjbOppo.size( 2 ), nOccupied );
-
-  LVARRAY_ERROR_IF_NE( VjiSame.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( VjiSame.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( VjiSame.size( 2 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( VjiOppo.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( VjiOppo.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( VjiOppo.size( 2 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( eigenvectors.size( 0 ), nBasis );
-  LVARRAY_ERROR_IF_NE( eigenvectors.size( 1 ), nOccupied );
+  CHECK_BOUNDS_3( VjbSame, nGridR1, nBasis, nOccupied );
+  CHECK_BOUNDS_3( VjbOppo, nGridR1, nBasis, nOccupied );
+  CHECK_BOUNDS_3( VjiSame, nGridR1, nBasis, nBasis );
+  CHECK_BOUNDS_3( VjiOppo, nGridR1, nBasis, nBasis );
+  CHECK_BOUNDS_2( eigenvectors, nBasis, nOccupied );
 
   // TODO: replace with a single matrix matrix multiplication.
   forAll< DefaultPolicy< ParallelHost > >( nGridR1,
@@ -407,7 +351,8 @@ void calculateVjb(
   );
 }
 
-
+/**
+ */
 template< typename T, typename REAL >
 void calculateVab(
   ArrayView3d< Cartesian< T > > const & VabSame,
@@ -424,24 +369,13 @@ void calculateVab(
   IndexType const nOccupied = VabSame.size( 1 );
   IndexType const nBasis = VjbSame.size( 1 );
 
-  LVARRAY_ERROR_IF_NE( VabSame.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( VabSame.size( 1 ), nOccupied );
-  LVARRAY_ERROR_IF_NE( VabSame.size( 2 ), nOccupied );
-
-  LVARRAY_ERROR_IF_NE( VabOppo.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( VabOppo.size( 1 ), nOccupied );
-  LVARRAY_ERROR_IF_NE( VabOppo.size( 2 ), nOccupied );
-
-  LVARRAY_ERROR_IF_NE( VjbSame.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( VjbSame.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( VjbSame.size( 2 ), nOccupied );
-
-  LVARRAY_ERROR_IF_NE( VjbOppo.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( VjbOppo.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( VjbOppo.size( 2 ), nOccupied );
-
-  LVARRAY_ERROR_IF_NE( eigenvectors.size( 0 ), nBasis );
-  LVARRAY_ERROR_IF_NE( eigenvectors.size( 1 ), nOccupied );
+  CHECK_BOUNDS_3( VabSame, nGridR1, nOccupied, nOccupied );
+  CHECK_BOUNDS_3( VabOppo, nGridR1, nOccupied, nOccupied );
+  CHECK_BOUNDS_1( sumOfNormsVabSame, nGridR1 );
+  CHECK_BOUNDS_1( sumOfNormsVabOppo, nGridR1 );
+  CHECK_BOUNDS_3( VjbSame, nGridR1, nBasis, nOccupied );
+  CHECK_BOUNDS_3( VjbOppo, nGridR1, nBasis, nOccupied );
+  CHECK_BOUNDS_2( eigenvectors, nBasis, nOccupied );
 
   sumOfNormsVabSame.zero();
   sumOfNormsVabOppo.zero();
@@ -473,6 +407,8 @@ void calculateVab(
   );
 }
 
+/**
+ */
 template< typename T >
 void calculateVTilde(
   ArrayView2d< Cartesian< T > > const & VTilde,
@@ -485,20 +421,10 @@ void calculateVTilde(
   IndexType const nGridR1 = VTilde.size( 1 );
   IndexType const nBasis = VjiSame.size( 1 );
 
-  LVARRAY_ERROR_IF_NE( VTilde.size( 0 ), 2 );
-  LVARRAY_ERROR_IF_NE( VTilde.size( 1 ), nGridR1 );
-
-  LVARRAY_ERROR_IF_NE( VjiSame.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( VjiSame.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( VjiSame.size( 2 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( VjiOppo.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( VjiOppo.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( VjiOppo.size( 2 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( density.size( 0 ), 2 );
-  LVARRAY_ERROR_IF_NE( density.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( density.size( 2 ), nBasis );
+  CHECK_BOUNDS_2( VTilde, 2, nGridR1 );
+  CHECK_BOUNDS_3( VjiSame, nGridR1, nBasis, nBasis );
+  CHECK_BOUNDS_3( VjiOppo, nGridR1, nBasis, nBasis );
+  CHECK_BOUNDS_3( density, 2, nBasis, nBasis );
 
   forAll< DefaultPolicy< ParallelHost > >( nGridR1,
     [=] ( IndexType const r1Idx )
@@ -522,7 +448,8 @@ void calculateVTilde(
   );
 }
 
-
+/**
+ */
 template< typename T >
 void calculateVTildeSubI(
   ArrayView3d< Cartesian< T > > const & VTildeSubI,
@@ -535,20 +462,10 @@ void calculateVTildeSubI(
   IndexType const nGridR1 = VTildeSubI.size( 1 );
   IndexType const nBasis = VTildeSubI.size( 2 );
 
-  LVARRAY_ERROR_IF_NE( VTildeSubI.size( 0 ), 2 );
-  LVARRAY_ERROR_IF_NE( VTildeSubI.size( 1 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( VTildeSubI.size( 2 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( VjiSame.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( VjiSame.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( VjiSame.size( 2 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( r1BasisValues.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( r1BasisValues.size( 1 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( density.size( 0 ), 2 );
-  LVARRAY_ERROR_IF_NE( density.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( density.size( 2 ), nBasis );
+  CHECK_BOUNDS_3( VTildeSubI, 2, nGridR1, nBasis );
+  CHECK_BOUNDS_3( VjiSame, nGridR1, nBasis, nBasis );
+  CHECK_BOUNDS_2( r1BasisValues, nGridR1, nBasis );
+  CHECK_BOUNDS_3( density, 2, nBasis, nBasis );
 
   VTildeSubI.zero();
   forAll< DefaultPolicy< ParallelHost > >( nGridR1,
@@ -577,7 +494,8 @@ void calculateVTildeSubI(
   );
 }
 
-
+/**
+ */
 template< typename T >
 void calculateSumOverb_Vbi_dot_VTildeb(
   ArrayView3d< T > const & SumOverb_Vbi_dot_VTildeb,
@@ -590,21 +508,10 @@ void calculateSumOverb_Vbi_dot_VTildeb(
   IndexType const nGridR1 = SumOverb_Vbi_dot_VTildeb.size( 1 );
   IndexType const nBasis = SumOverb_Vbi_dot_VTildeb.size( 2 );
 
-  LVARRAY_ERROR_IF_NE( SumOverb_Vbi_dot_VTildeb.size( 0 ), 2 );
-  LVARRAY_ERROR_IF_NE( SumOverb_Vbi_dot_VTildeb.size( 1 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( SumOverb_Vbi_dot_VTildeb.size( 2 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( VTildeSubI.size( 0 ), 2 );
-  LVARRAY_ERROR_IF_NE( VTildeSubI.size( 1 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( VTildeSubI.size( 2 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( VjiSame.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( VjiSame.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( VjiSame.size( 2 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( density.size( 0 ), 2 );
-  LVARRAY_ERROR_IF_NE( density.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( density.size( 2 ), nBasis );
+  CHECK_BOUNDS_3( SumOverb_Vbi_dot_VTildeb, 2, nGridR1, nBasis );
+  CHECK_BOUNDS_3( VTildeSubI, 2, nGridR1, nBasis );
+  CHECK_BOUNDS_3( VjiSame, nGridR1, nBasis, nBasis );
+  CHECK_BOUNDS_3( density, 2, nBasis, nBasis );
 
   SumOverb_Vbi_dot_VTildeb.zero();
   forAll< DefaultPolicy< ParallelHost > >( nGridR1,
@@ -633,24 +540,22 @@ void calculateSumOverb_Vbi_dot_VTildeb(
   );
 }
 
+/**
+ */
 template< typename T >
 void calculateOccupiedElectronDensity(
   ArrayView2d< RealType< T > > const & occupiedElectronDensity,
   ArrayView2d< T const > const & basisValues,
   ArrayView3d< T const > const & density )
 {
+  TCSCF_MARK_FUNCTION;
+
   IndexType const nGridR1 = occupiedElectronDensity.size( 1 );
   IndexType const nBasis = basisValues.size( 1 );
 
-  LVARRAY_ERROR_IF_NE( occupiedElectronDensity.size( 0 ), 2 );
-  LVARRAY_ERROR_IF_NE( occupiedElectronDensity.size( 1 ), nGridR1 );
-
-  LVARRAY_ERROR_IF_NE( basisValues.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( basisValues.size( 1 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( density.size( 0 ), 2 );
-  LVARRAY_ERROR_IF_NE( density.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( density.size( 2 ), nBasis );
+  CHECK_BOUNDS_2( occupiedElectronDensity, 2, nGridR1 );
+  CHECK_BOUNDS_2( basisValues, nGridR1, nBasis );
+  CHECK_BOUNDS_3( density, 2, nBasis, nBasis );
 
   forAll< DefaultPolicy< ParallelHost > >( nGridR1,
     [=] ( IndexType const r1Idx )
@@ -676,7 +581,8 @@ void calculateOccupiedElectronDensity(
   );
 }
 
-
+/**
+ */
 template< typename T >
 void calculateSumOverb_conjVTildeb_occb(
   ArrayView2d< Cartesian< T > > const & SumOverb_conjVTildeb_occb,
@@ -684,22 +590,15 @@ void calculateSumOverb_conjVTildeb_occb(
   ArrayView2d< T const > const & basisValues,
   ArrayView3d< T const > const & density )
 {
+  TCSCF_MARK_FUNCTION;
+
   IndexType const nGridR1 = SumOverb_conjVTildeb_occb.size( 1 );
   IndexType const nBasis = VTildeSubI.size( 2 );
 
-  LVARRAY_ERROR_IF_NE( SumOverb_conjVTildeb_occb.size( 0 ), 2 );
-  LVARRAY_ERROR_IF_NE( SumOverb_conjVTildeb_occb.size( 1 ), nGridR1 );
-
-  LVARRAY_ERROR_IF_NE( VTildeSubI.size( 0 ), 2 );
-  LVARRAY_ERROR_IF_NE( VTildeSubI.size( 1 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( VTildeSubI.size( 2 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( basisValues.size( 0 ), nGridR1 );
-  LVARRAY_ERROR_IF_NE( basisValues.size( 1 ), nBasis );
-
-  LVARRAY_ERROR_IF_NE( density.size( 0 ), 2 );
-  LVARRAY_ERROR_IF_NE( density.size( 1 ), nBasis );
-  LVARRAY_ERROR_IF_NE( density.size( 2 ), nBasis );
+  CHECK_BOUNDS_2( SumOverb_conjVTildeb_occb, 2, nGridR1 );
+  CHECK_BOUNDS_3( VTildeSubI, 2, nGridR1, nBasis );
+  CHECK_BOUNDS_2( basisValues, nGridR1, nBasis );
+  CHECK_BOUNDS_3( density, 2, nBasis, nBasis );
 
   forAll< DefaultPolicy< ParallelHost > >( nGridR1,
     [=] ( IndexType const r1Idx )
@@ -724,27 +623,8 @@ void calculateSumOverb_conjVTildeb_occb(
   );
 }
 
-#define CHECK_BOUNDS_1( array, size0 ) \
-  LVARRAY_ERROR_IF_NE( array.size( 0 ), size0 )
-
-#define CHECK_BOUNDS_2( array, size0, size1 ) \
-  LVARRAY_ERROR_IF_NE( array.size( 0 ), size0 ); \
-  LVARRAY_ERROR_IF_NE( array.size( 1 ), size1 )
-
-#define CHECK_BOUNDS_3( array, size0, size1, size2 ) \
-  LVARRAY_ERROR_IF_NE( array.size( 0 ), size0 ); \
-  LVARRAY_ERROR_IF_NE( array.size( 1 ), size1 ); \
-  LVARRAY_ERROR_IF_NE( array.size( 2 ), size2 )
-
-#define CHECK_BOUNDS_6( array, size0, size1, size2, size3, size4, size5 ) \
-  LVARRAY_ERROR_IF_NE( array.size( 0 ), size0 ); \
-  LVARRAY_ERROR_IF_NE( array.size( 1 ), size1 ); \
-  LVARRAY_ERROR_IF_NE( array.size( 2 ), size2 ); \
-  LVARRAY_ERROR_IF_NE( array.size( 3 ), size3 ); \
-  LVARRAY_ERROR_IF_NE( array.size( 4 ), size4 ); \
-  LVARRAY_ERROR_IF_NE( array.size( 5 ), size5 )
-
-
+/**
+ */
 template< typename T, typename REAL >
 void computeQ(
   ArrayView6d< T > const & QSameSame,
@@ -755,6 +635,8 @@ void computeQ(
   ArrayView1d< REAL const > const & r1Weights,
   ArrayView2d< T const > const & r1BasisValues )
 {
+  TCSCF_MARK_FUNCTION;
+
   using Real = REAL;
 
   IndexType const nBasis = QSameSame.size( 0 );
@@ -815,7 +697,8 @@ void computeQ(
   );
 }
 
-
+/**
+ */
 template< typename T >
 void assembleG(
   ArrayView3d< T > const & G_3New,
@@ -824,6 +707,8 @@ void assembleG(
   ArrayView6d< T const > const & QOppoOppo,
   ArrayView3d< T const > const & density )
 {
+  TCSCF_MARK_FUNCTION;
+
   IndexType const nBasis = G_3New.size( 1 );
 
   CHECK_BOUNDS_3( G_3New, 2, nBasis, nBasis );
@@ -883,7 +768,62 @@ void assembleG(
   );
 }
 
+/**
+ */
+template< typename T, typename REAL >
+void ensureNoLMOverlap(
+  ArrayView3d< T, 2 > const & op,
+  std::vector< OchiBasisFunction< REAL > > const & basisFunctions )
+{
+  TCSCF_MARK_FUNCTION;
 
+  int const nSpin = op.size( 0 );
+  IndexType const nBasis = basisFunctions.size();
+
+  CHECK_BOUNDS_3( op, nSpin, nBasis, nBasis );
+
+  forAll< DefaultPolicy< ParallelHost > >( nBasis * nBasis,
+    [&] ( IndexType const ji )
+    {
+      IndexType const j = ji / nBasis;
+      IndexType const i = ji % nBasis;
+
+      if( basisFunctions[ j ].l != basisFunctions[ i ].l || basisFunctions[ j ].m != basisFunctions[ i ].m )
+      {
+        for( int spin = 0; spin < nSpin; ++spin )
+        {
+          op( spin, j, i ) = 0;
+        }
+      }
+    }
+  );
+}
+
+/**
+ */
+template< typename T, typename REAL >
+void ensureNoLMOverlap(
+  ArrayView2d< T, 0 > const & scfOperator,
+  std::vector< OchiBasisFunction< REAL > > const & basisFunctions )
+{
+  TCSCF_MARK_FUNCTION;
+
+  IndexType const nBasis = basisFunctions.size();
+  CHECK_BOUNDS_2( scfOperator, nBasis, nBasis );
+
+  forAll< DefaultPolicy< ParallelHost > >( nBasis * nBasis,
+    [&] ( IndexType const ji )
+    {
+      IndexType const j = ji / nBasis;
+      IndexType const i = ji % nBasis;
+
+      if( basisFunctions[ j ].l != basisFunctions[ i ].l || basisFunctions[ j ].m != basisFunctions[ i ].m )
+      {
+        scfOperator( j, i ) = 0;
+      }
+    }
+  );
+}
 
 
 } // namespace internal
@@ -895,7 +835,8 @@ RealType< T > RCSHartreeFock< T >::compute(
   ArrayView2d< T const > const & overlap,
   ArrayView2d< Real const > const & oneElectronTerms,
   integration::QMCGrid< Real, 3 > const & r1Grid,
-  ArrayView3d< Real const > const & Fji )
+  ArrayView3d< Real const > const & Fji,
+  std::vector< OchiBasisFunction< Real > > const & basisFunctions )
 {
   TCSCF_MARK_FUNCTION;
 
@@ -917,13 +858,14 @@ RealType< T > RCSHartreeFock< T >::compute(
 
   Array1d< T > const Faa( r1Grid.nGrid() );
   Array2d< T > const Fai( r1Grid.nGrid(), basisSize );
+  Array3d< T > const twoElectronTerms( 1, basisSize, basisSize );
 
   for( _iter = 0; _iter < 50; ++_iter )
   {
     Faa.zero();
     Fai.zero();
-    internal::calculateIaa( Faa.toSlice(), Fji, density.toSliceConst() );
-    internal::calculateFai( Fai.toSlice(), Fji, r1Grid.basisValues.toViewConst(), density.toSliceConst() );
+    internal::calculateIaa( Faa.toSlice(), Fji, density[ 0 ].toSliceConst() );
+    internal::calculateFai( Fai.toSlice(), Fji, r1Grid.basisValues.toViewConst(), density[ 0 ].toSliceConst() );
 
     {
       TCSCF_MARK_SCOPE( "Constructing fock operator" );
@@ -943,17 +885,19 @@ RealType< T > RCSHartreeFock< T >::compute(
             twoElectronContribution += r1Weights[ r1Idx ] * conj( r1Grid.basisValues( r1Idx, j ) ) * (2 * r1Grid.basisValues( r1Idx, i ) * Faa( r1Idx ) - Fai( r1Idx, i ) );
           }
 
-          fockOperator( j, i ) = oneElectronTerms( j, i ) + twoElectronContribution;
+          twoElectronTerms( 0, j, i ) = twoElectronContribution;
         }
       );
     }
 
-    Real const newEnergy = internal::calculateEnergy(
-      fockOperator.toSliceConst(),
-      fockOperator.toSliceConst(),
-      density.toSliceConst(),
-      density.toSliceConst(),
-      oneElectronTerms.toSliceConst() ).real();
+    internal::ensureNoLMOverlap( twoElectronTerms, basisFunctions );
+
+    Real const newEnergy = 2 * internal::constructSCFOperator(
+      fockOperator,
+      oneElectronTerms.toViewConst(),
+      twoElectronTerms.toViewConst(),
+      {},
+      density.toViewConst() ).real();
 
     if( std::abs( (newEnergy - energy) / energy ) < 1e-8 )
     {
@@ -967,10 +911,10 @@ RealType< T > RCSHartreeFock< T >::compute(
       LvArray::dense::heevr(
         LvArray::dense::BuiltInBackends::LAPACK,
         eigenDecompositionOptions,
-        fockOperator.toView(),
-        eigenvalues.toView(),
-        eigenvectors.toView(),
-        _support.toView(),
+        fockOperator[ 0 ],
+        eigenvalues.toSlice(),
+        eigenvectors.toSlice(),
+        _support.toSlice(),
         _workspace,
         LvArray::dense::SymmetricMatrixStorageType::UPPER_TRIANGULAR );
     }
@@ -979,7 +923,7 @@ RealType< T > RCSHartreeFock< T >::compute(
       LVARRAY_ERROR( "Generalized eigenvalue problem not yet supported." );
     }
 
-    internal::getNewDensity( nElectrons / 2, density.toSlice(), eigenvectors.toSliceConst() );
+    internal::getNewDensity( nElectrons / 2, density[ 0 ], eigenvectors.toSliceConst() );
   }
 
   LVARRAY_ERROR( "Did not converge :(" );
@@ -994,7 +938,8 @@ RealType< T > UOSHartreeFock< T >::compute(
   ArrayView2d< T const > const & overlap,
   ArrayView2d< Real const > const & oneElectronTerms,
   integration::QMCGrid< Real, 3 > const & r1Grid,
-  ArrayView3d< Real const > const & Fji )
+  ArrayView3d< Real const > const & Fji,
+  std::vector< OchiBasisFunction< Real > > const & basisFunctions )
 {
   TCSCF_MARK_FUNCTION;
 
@@ -1021,8 +966,9 @@ RealType< T > UOSHartreeFock< T >::compute(
 
   Array2d< T > const Faa( 2, r1Grid.nGrid() );
   Array3d< T > const Fai( 2, r1Grid.nGrid(), basisSize );
+  Array3d< T > const twoElectronTerms( 2, basisSize, basisSize );
 
-  for( _iter = 0; _iter < 50; ++_iter )
+  for( _iter = 0; _iter < 100; ++_iter )
   {
     Faa.zero();
     Fai.zero();
@@ -1052,17 +998,19 @@ RealType< T > UOSHartreeFock< T >::compute(
               (r1Grid.basisValues( r1Idx, i ) * (Faa( spin, r1Idx ) + Faa( !spin, r1Idx )) - Fai( spin, r1Idx, i ));
           }
 
-          fockOperator( spin, j, i ) = oneElectronTerms( j, i ) + twoElectronContribution;
+          twoElectronTerms( spin, j, i ) = twoElectronContribution;
         }
       );
     }
 
-    Real const newEnergy = internal::calculateEnergy(
-      fockOperator[ 0 ].toSliceConst(),
-      fockOperator[ 1 ].toSliceConst(),
-      density[ 0 ].toSliceConst(),
-      density[ 1 ].toSliceConst(),
-      oneElectronTerms.toSliceConst() ).real();
+    internal::ensureNoLMOverlap( twoElectronTerms, basisFunctions );
+
+    Real const newEnergy = internal::constructSCFOperator(
+      fockOperator.toView(),
+      oneElectronTerms.toViewConst(), 
+      twoElectronTerms.toViewConst(),
+      {},
+      density.toViewConst() ).real();
 
     if( std::abs( (newEnergy - energy) / energy ) < 1e-8 )
     {
@@ -1145,10 +1093,6 @@ RealType< T > TCHartreeFock< T >::compute(
 
   Array2d< Cartesian< T > > const scaledGradients( 2, r1Grid.nGrid() );
 
-
-
-
-
   CArray< Array3d< Cartesian< T > >, 2 > const VjbSame {
     Array3d< Cartesian< T > >( r1Grid.nGrid(), basisSize, nElectrons[ 0 ] ),
     Array3d< Cartesian< T > >( r1Grid.nGrid(), basisSize, nElectrons[ 1 ] ) };
@@ -1188,48 +1132,11 @@ RealType< T > TCHartreeFock< T >::compute(
   Array3d< T > const twoElectronTerms( 2, basisSize, basisSize );
   Array3d< T > const G_3( 2, basisSize, basisSize );
 
-
-  // {
-  //   density.zero();
-  //   occupiedOrbitals[ 0 ].zero();
-  //   occupiedOrbitals[ 1 ].zero();
-
-  //   std::mt19937_64 gen;
-  //   auto dist = std::normal_distribution< Real >( 10, 10 );
-    
-  //   for( int spin = 0; spin < 2; ++spin )
-  //   {
-  //     LVARRAY_ERROR_IF_NE( nElectrons[ spin ], 1 );
-      
-  //     T norm = 0;
-  //     for( auto & val : occupiedOrbitals[ spin ] )
-  //     {
-  //       val = dist( gen );
-  //       norm += val * val;
-  //     }
-
-  //     norm = std::sqrt( norm );
-  //     for( auto & val : occupiedOrbitals[ spin ] )
-  //     {
-  //       val /= norm;
-  //     }
-
-  //     internal::getNewDensity( nElectrons[ spin ], density[ spin ], occupiedOrbitals[ spin ].toSliceConst() );
-  //   }
-  // }
-
-
-
-
-
   Array6d< T > const QSameSame( basisSize, basisSize, basisSize, basisSize, basisSize, basisSize );
   Array6d< T > const QSameOppo( basisSize, basisSize, basisSize, basisSize, basisSize, basisSize );
   Array6d< T > const QOppoOppo( basisSize, basisSize, basisSize, basisSize, basisSize, basisSize );
 
   internal::computeQ( QSameSame, QSameOppo, QOppoOppo, VjiSame, VjiOppo, r1Grid.quadratureGrid.weights.toViewConst(), r1Grid.basisValues.toViewConst() );
-
-
-
   Array3d< T > const G_3New( 2, basisSize, basisSize );
 
   for( _iter = 0; _iter < 100; ++_iter )
@@ -1260,14 +1167,9 @@ RealType< T > TCHartreeFock< T >::compute(
 
       internal::calculateScaledGradients( scaledGradients[ spin ], r1Grid.basisValues.toViewConst(), r1Grid.basisGradients.toViewConst(), density[ spin ].toSliceConst() );
 
-      
-      
-      
       internal::calculateVjb( VjbSame[ spin ], VjbOppo[ spin ], VjiSame, VjiOppo, occupiedOrbitals[ spin ].toViewConst() );
 
       internal::calculateVab( VabSame[ spin ], VabOppo[ spin ], sumOfNormsVabSame[ spin ].toView(), sumOfNormsVabOppo[ spin ].toView(), VjbSame[ spin ].toViewConst(), VjbOppo[ spin ].toViewConst(), occupiedOrbitals[ spin ].toViewConst() );
-
-
     }
 
     // Three electron precomputation
@@ -1276,35 +1178,6 @@ RealType< T > TCHartreeFock< T >::compute(
     internal::calculateVTildeSubI( VTildeSubI, VjiSame, r1Grid.basisValues.toViewConst(), density.toViewConst() );
 
     internal::calculateSumOverb_Vbi_dot_VTildeb( SumOverb_Vbi_dot_VTildeb, VTildeSubI.toViewConst(), VjiSame, density.toViewConst() );
-
-
-    // {
-    //   for( IndexType r1Idx = 0; r1Idx < r1Grid.nGrid(); ++r1Idx )
-    //   {
-    //     for( int spin = 0; spin < 2; ++spin )
-    //     {
-    //       for( IndexType i = 0; i < basisSize; ++i )
-    //       {
-    //         T value = 0;
-    //         for( IndexType k = 0; k < basisSize; ++k )
-    //         {
-    //           for( IndexType ell = 0; ell < basisSize; ++ell )
-    //           {
-    //             for( IndexType m = 0; m < basisSize; ++m )
-    //             {
-    //               for( IndexType n = 0; n < basisSize; ++n )
-    //               {
-    //                 value += density( spin, ell, k ) * density( spin, n, m ) * dot( VjiSame( r1Idx, k, i ), VjiSame( r1Idx, m, ell) ) * r1Grid.basisValues( r1Idx, n );
-    //               }
-    //             }
-    //           }
-    //         }
-
-    //         LVARRAY_ERROR_IF_GT( std::abs( value - SumOverb_Vbi_dot_VTildeb( spin, r1Idx, i ) ), 1e-16 );
-    //       }
-    //     }
-    //   }
-    // }
 
     internal::calculateOccupiedElectronDensity( occupiedElectronDensity, r1Grid.basisValues.toViewConst(), density.toViewConst() );
 
@@ -1382,13 +1255,6 @@ RealType< T > TCHartreeFock< T >::compute(
           IndexType const i = ji % basisSize;
 
           twoElectronTerms( spin, j, i ) += vectorComponent( spin, j, i ) - conj( vectorComponent( spin, i, j ) );
-
-          if( basisFunctions[ j ].l != basisFunctions[ i ].l || basisFunctions[ j ].m != basisFunctions[ i ].m )
-          {
-            twoElectronTerms( spin, j, i ) = 0;
-            G_3New( spin, j, i ) = 0;
-            G_3( spin, j, i ) = 0;
-          }
         }
       );
     }
@@ -1415,6 +1281,10 @@ RealType< T > TCHartreeFock< T >::compute(
 
     //   LVARRAY_LOG( "maxAbsDiff = " << maxAbsDiff << ", d1 = " << d1 << ", d2 = " << d2 );
     // }
+
+
+    internal::ensureNoLMOverlap( twoElectronTerms, basisFunctions );
+    internal::ensureNoLMOverlap( G_3New, basisFunctions );
 
     Real const newEnergy = internal::constructSCFOperator(
       fockOperator.toView(),

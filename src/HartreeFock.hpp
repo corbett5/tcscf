@@ -193,8 +193,8 @@ struct RCSHartreeFock
   RCSHartreeFock( int const numElectrons, int const numBasisFunctions ):
     nElectrons{ numElectrons },
     basisSize{ numBasisFunctions },
-    density( numBasisFunctions, numBasisFunctions ),
-    fockOperator( numBasisFunctions, numBasisFunctions ),
+    density( 1, numBasisFunctions, numBasisFunctions ),
+    fockOperator( 1, numBasisFunctions, numBasisFunctions ),
     eigenvalues( numBasisFunctions ),
     eigenvectors( numBasisFunctions, numElectrons / 2 ),
     _support( 2 * numBasisFunctions )
@@ -225,7 +225,8 @@ struct RCSHartreeFock
     ArrayView2d< T const > const & overlap,
     ArrayView2d< Real const > const & oneElectronTerms,
     integration::QMCGrid< Real, 3 > const & r1Grid,
-    ArrayView3d< Real const > const & FjiSame );
+    ArrayView3d< Real const > const & FjiSame,
+    std::vector< OchiBasisFunction< Real > > const & basisFunctions );
 
   /**
    */
@@ -236,8 +237,8 @@ struct RCSHartreeFock
 
   int const nElectrons;
   int const basisSize;
-  Array2d< T > const density;
-  Array2d< T, RAJA::PERM_JI > const fockOperator;
+  Array3d< T > const density;
+  Array3d< T, RAJA::PERM_IKJ > const fockOperator;
   Array1d< Real > const eigenvalues;
   Array2d< T, RAJA::PERM_JI > const eigenvectors;
 
@@ -283,7 +284,8 @@ struct UOSHartreeFock
     ArrayView2d< T const > const & overlap,
     ArrayView2d< Real const > const & oneElectronTerms,
     integration::QMCGrid< Real, 3 > const & r1Grid,
-    ArrayView3d< Real const > const & Fji );
+    ArrayView3d< Real const > const & Fji,
+    std::vector< OchiBasisFunction< Real > > const & basisFunctions );
 
   /**
    */

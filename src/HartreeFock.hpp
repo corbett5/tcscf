@@ -10,6 +10,7 @@
 
 
 #include "OchiBasis.hpp"
+#include "HydrogenLikeBasis.hpp"
 
 
 
@@ -19,6 +20,9 @@
 
 namespace tcscf
 {
+
+template< typename REAL >
+using BasisFunctionType = OchiBasisFunction< REAL >;
 
 /**
  */
@@ -226,7 +230,7 @@ struct RCSHartreeFock
     ArrayView2d< Real const > const & oneElectronTerms,
     integration::QMCGrid< Real, 3 > const & r1Grid,
     ArrayView3d< Real const > const & FjiSame,
-    std::vector< OchiBasisFunction< Real > > const & basisFunctions );
+    std::vector< BasisFunctionType< Real > > const & basisFunctions );
 
   /**
    */
@@ -285,7 +289,7 @@ struct UOSHartreeFock
     ArrayView2d< Real const > const & oneElectronTerms,
     integration::QMCGrid< Real, 3 > const & r1Grid,
     ArrayView3d< Real const > const & Fji,
-    std::vector< OchiBasisFunction< Real > > const & basisFunctions );
+    std::vector< BasisFunctionType< Real > > const & basisFunctions );
 
   /**
    */
@@ -351,7 +355,7 @@ struct TCHartreeFock
     ArrayView3d< Real const > const & FjiOppo,
     ArrayView3d< Cartesian< T > const > const & VjiSame,
     ArrayView3d< Cartesian< T > const > const & VjiOppo,
-    std::vector< OchiBasisFunction< Real > > const & basisFunctions );
+    std::vector< BasisFunctionType< Real > > const & basisFunctions );
 
   /**
    */

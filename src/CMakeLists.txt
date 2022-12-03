@@ -15,6 +15,7 @@ set( tcscf_headers
     RAJAInterface.hpp
     setup.hpp
     orthogonalization.hpp
+    SlaterTypeOrbital.hpp
     
     integration/changeOfVariables.hpp
     integration/ChebyshevGauss.hpp

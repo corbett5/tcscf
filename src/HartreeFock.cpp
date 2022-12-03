@@ -122,34 +122,40 @@ T constructSCFOperator(
  */
 template< typename T >
 void calculateScaledGradients(
-  ArraySlice1d< Cartesian< T > > const & scaledGradients,
+  ArrayView2d< Cartesian< T > > const & scaledGradients,
   ArrayView2d< T const > const & r1BasisValues,
   ArrayView2d< Cartesian< T > const > const & r1BasisGradients,
-  ArraySlice2d< T const > const & density )
+  ArrayView3d< T const > const & density )
 {
   TCSCF_MARK_FUNCTION;
 
-  IndexType const nGridR1 = scaledGradients.size( 0 );
+  IndexType const nGridR1 = scaledGradients.size( 1 );
   IndexType const nBasis = r1BasisValues.size( 1 );
 
-  CHECK_BOUNDS_1( scaledGradients, nGridR1 );
+  CHECK_BOUNDS_2( scaledGradients, 2, nGridR1 );
   CHECK_BOUNDS_2( r1BasisValues, nGridR1, nBasis );
   CHECK_BOUNDS_2( r1BasisGradients, nGridR1, nBasis );
-  CHECK_BOUNDS_2( density, nBasis, nBasis );
+  CHECK_BOUNDS_3( density, 2, nBasis, nBasis );
 
   forAll< DefaultPolicy< ParallelHost > >( nGridR1,
     [=] ( IndexType const r1Idx )
     {
-      Cartesian< T > answer {};
+      Cartesian< T > answer[ 2 ] {};
       for( IndexType j = 0; j < nBasis; ++j )
       {
         for( IndexType i = 0; i < nBasis; ++i )
         {
-          answer.scaledAdd( density( i, j ) * conj( r1BasisValues( r1Idx, j ) ), r1BasisGradients( r1Idx, i ) );
+          for( int spin = 0; spin < 2; ++spin )
+          {
+            answer[ spin ].scaledAdd( density( spin, i, j ) * conj( r1BasisValues( r1Idx, j ) ), r1BasisGradients( r1Idx, i ) );
+          }
         }
       }
 
-      scaledGradients[ r1Idx ] = answer;
+      for( int spin = 0; spin < 2; ++spin )
+      {
+        scaledGradients( spin, r1Idx ) = answer[ spin ];
+      }
     }
   );
 }
@@ -773,7 +779,7 @@ void assembleG(
 template< typename T, typename REAL >
 void ensureNoLMOverlap(
   ArrayView3d< T, 2 > const & op,
-  std::vector< OchiBasisFunction< REAL > > const & basisFunctions )
+  std::vector< BasisFunctionType< REAL > > const & basisFunctions )
 {
   TCSCF_MARK_FUNCTION;
 
@@ -799,33 +805,6 @@ void ensureNoLMOverlap(
   );
 }
 
-/**
- */
-template< typename T, typename REAL >
-void ensureNoLMOverlap(
-  ArrayView2d< T, 0 > const & scfOperator,
-  std::vector< OchiBasisFunction< REAL > > const & basisFunctions )
-{
-  TCSCF_MARK_FUNCTION;
-
-  IndexType const nBasis = basisFunctions.size();
-  CHECK_BOUNDS_2( scfOperator, nBasis, nBasis );
-
-  forAll< DefaultPolicy< ParallelHost > >( nBasis * nBasis,
-    [&] ( IndexType const ji )
-    {
-      IndexType const j = ji / nBasis;
-      IndexType const i = ji % nBasis;
-
-      if( basisFunctions[ j ].l != basisFunctions[ i ].l || basisFunctions[ j ].m != basisFunctions[ i ].m )
-      {
-        scfOperator( j, i ) = 0;
-      }
-    }
-  );
-}
-
-
 } // namespace internal
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -836,7 +815,7 @@ RealType< T > RCSHartreeFock< T >::compute(
   ArrayView2d< Real const > const & oneElectronTerms,
   integration::QMCGrid< Real, 3 > const & r1Grid,
   ArrayView3d< Real const > const & Fji,
-  std::vector< OchiBasisFunction< Real > > const & basisFunctions )
+  std::vector< BasisFunctionType< Real > > const & basisFunctions )
 {
   TCSCF_MARK_FUNCTION;
 
@@ -899,7 +878,7 @@ RealType< T > RCSHartreeFock< T >::compute(
       {},
       density.toViewConst() ).real();
 
-    if( std::abs( (newEnergy - energy) / energy ) < 1e-8 )
+    if( std::abs( (newEnergy - energy) ) < 1e-5 )
     {
       return newEnergy;
     }
@@ -939,7 +918,7 @@ RealType< T > UOSHartreeFock< T >::compute(
   ArrayView2d< Real const > const & oneElectronTerms,
   integration::QMCGrid< Real, 3 > const & r1Grid,
   ArrayView3d< Real const > const & Fji,
-  std::vector< OchiBasisFunction< Real > > const & basisFunctions )
+  std::vector< BasisFunctionType< Real > > const & basisFunctions )
 {
   TCSCF_MARK_FUNCTION;
 
@@ -1012,7 +991,7 @@ RealType< T > UOSHartreeFock< T >::compute(
       {},
       density.toViewConst() ).real();
 
-    if( std::abs( (newEnergy - energy) / energy ) < 1e-8 )
+    if( std::abs( (newEnergy - energy) ) < 1e-5 )
     {
       return newEnergy;
     }
@@ -1059,7 +1038,7 @@ RealType< T > TCHartreeFock< T >::compute(
   ArrayView3d< Real const > const & FjiOppo,
   ArrayView3d< Cartesian< T > const > const & VjiSame,
   ArrayView3d< Cartesian< T > const > const & VjiOppo,
-  std::vector< OchiBasisFunction< Real > > const & basisFunctions )
+  std::vector< BasisFunctionType< Real > > const & basisFunctions )
 {
   TCSCF_MARK_FUNCTION;
 
@@ -1132,12 +1111,12 @@ RealType< T > TCHartreeFock< T >::compute(
   Array3d< T > const twoElectronTerms( 2, basisSize, basisSize );
   Array3d< T > const G_3( 2, basisSize, basisSize );
 
-  Array6d< T > const QSameSame( basisSize, basisSize, basisSize, basisSize, basisSize, basisSize );
-  Array6d< T > const QSameOppo( basisSize, basisSize, basisSize, basisSize, basisSize, basisSize );
-  Array6d< T > const QOppoOppo( basisSize, basisSize, basisSize, basisSize, basisSize, basisSize );
+  // Array6d< T > const QSameSame( basisSize, basisSize, basisSize, basisSize, basisSize, basisSize );
+  // Array6d< T > const QSameOppo( basisSize, basisSize, basisSize, basisSize, basisSize, basisSize );
+  // Array6d< T > const QOppoOppo( basisSize, basisSize, basisSize, basisSize, basisSize, basisSize );
 
-  internal::computeQ( QSameSame, QSameOppo, QOppoOppo, VjiSame, VjiOppo, r1Grid.quadratureGrid.weights.toViewConst(), r1Grid.basisValues.toViewConst() );
-  Array3d< T > const G_3New( 2, basisSize, basisSize );
+  // internal::computeQ( QSameSame, QSameOppo, QOppoOppo, VjiSame, VjiOppo, r1Grid.quadratureGrid.weights.toViewConst(), r1Grid.basisValues.toViewConst() );
+  // Array3d< T > const G_3New( 2, basisSize, basisSize );
 
   for( _iter = 0; _iter < 100; ++_iter )
   {
@@ -1150,7 +1129,7 @@ RealType< T > TCHartreeFock< T >::compute(
 
     scaledGradients.zero();
 
-    internal::assembleG( G_3New, QSameSame.toViewConst(), QSameOppo.toViewConst(), QOppoOppo.toViewConst(), density.toViewConst() );
+    // internal::assembleG( G_3New, QSameSame.toViewConst(), QSameOppo.toViewConst(), QOppoOppo.toViewConst(), density.toViewConst() );
 
     for( int spin = 0; spin < 2; ++spin )
     {
@@ -1165,7 +1144,7 @@ RealType< T > TCHartreeFock< T >::compute(
       internal::calculateVai( Vai[ spin ], VjiSame, r1Grid.basisGradients.toViewConst(), density[ spin ].toSliceConst() );
       internal::calculateVja( Vja[ spin ], VjiSame, r1Grid.basisValues.toViewConst(), density[ spin ].toSliceConst() );
 
-      internal::calculateScaledGradients( scaledGradients[ spin ], r1Grid.basisValues.toViewConst(), r1Grid.basisGradients.toViewConst(), density[ spin ].toSliceConst() );
+      internal::calculateScaledGradients( scaledGradients, r1Grid.basisValues.toViewConst(), r1Grid.basisGradients.toViewConst(), density.toViewConst() );
 
       internal::calculateVjb( VjbSame[ spin ], VjbOppo[ spin ], VjiSame, VjiOppo, occupiedOrbitals[ spin ].toViewConst() );
 
@@ -1173,6 +1152,7 @@ RealType< T > TCHartreeFock< T >::compute(
     }
 
     // Three electron precomputation
+
     internal::calculateVTilde( VTilde, VjiSame, VjiOppo, density.toViewConst() );
 
     internal::calculateVTildeSubI( VTildeSubI, VjiSame, r1Grid.basisValues.toViewConst(), density.toViewConst() );
@@ -1284,16 +1264,16 @@ RealType< T > TCHartreeFock< T >::compute(
 
 
     internal::ensureNoLMOverlap( twoElectronTerms, basisFunctions );
-    internal::ensureNoLMOverlap( G_3New, basisFunctions );
+    internal::ensureNoLMOverlap( G_3, basisFunctions );
 
     Real const newEnergy = internal::constructSCFOperator(
       fockOperator.toView(),
       oneElectronTerms.toViewConst(), 
       twoElectronTerms.toViewConst(),
-      G_3New.toViewConst(),
+      G_3.toViewConst(),
       density.toViewConst() ).real();
 
-    if( std::abs( (newEnergy - energy) / energy ) < 10 * std::numeric_limits< Real >::epsilon() )
+    if( std::abs( (newEnergy - energy) ) < 1e-5 )
     {
       return newEnergy;
     }

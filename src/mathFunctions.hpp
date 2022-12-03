@@ -43,33 +43,57 @@ constexpr std::complex< T > I = std::complex< T >( 0, 1 );
 // Math helpers
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+/**
+ */
 template< typename T >
 constexpr bool isComplex = internal::IsComplex< T >::value;
 
+/**
+ */
 template< typename T >
 constexpr std::enable_if_t< !isComplex< T >, T >
 conj( T const & value )
 { return value; }
 
+/**
+ */
 template< typename T >
 constexpr std::enable_if_t< isComplex< T >, T >
 conj( T const & value )
 { return std::conj( value ); }
 
+/**
+ */
 template< typename T >
 std::complex< T > operator*( int const x, std::complex< T > const & z )
 { return { z.real() * x, z.imag() * x }; }
 
+/**
+ */
 template< typename T >
 std::complex< T > operator*( std::complex< T > const & z, int const x )
 { return { z.real() * x, z.imag() * x }; }
 
+/**
+ */
 template< typename T >
 std::complex< T > operator/( std::complex< T > const & z, int const x )
 { return { z.real() / x, z.imag() / x }; }
 
 /**
- * 
+ */
+constexpr std::int64_t factorial( int const n )
+{
+  std::int64_t result = 1;
+  for( int i = 2; i <= n; ++i )
+  {
+    result *= i;
+  }
+
+  return result;
+}
+
+/**
  */
 constexpr std::int64_t truncatedFactorial( int const max, int const min )
 {

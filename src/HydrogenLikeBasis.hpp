@@ -36,15 +36,21 @@ struct HydrogenLikeBasisFunction
   /**
    * 
    */
-  Complex operator()( Real const r, Real const theta, Real const phi ) const
-  { return radialComponent( r ) * sphericalHarmonic( l, m, theta, phi ); }
+  Complex operator()( Spherical< Real > const & r ) const
+  { return radialComponent( r.r() ) * sphericalHarmonic( l, m, r.theta(), r.phi() ); }
 
   /**
    * 
    */
-  Real radialComponent(Real const r) const
+  Real radialComponent( Real const r ) const
   {
     return normalization * std::pow( r, l ) * assocLaguerre( n - l - 1 , 2 * l + 1, 2 * beta * r ) * std::exp( -beta * r );
+  }
+
+  Cartesian< Complex > gradient( Spherical< Real > const & r ) const
+  {
+    LVARRAY_ERROR( "Uh oh" << r.x() );
+    return {};
   }
 
   int const n;
@@ -63,7 +69,7 @@ struct HydrogenLikeBasisFunction
  */
 template< typename REAL >
 REAL coreMatrixElement(
-  ArrayView2d< REAL const > const & LVARRAY_UNUSED_ARG( quadratureGrid ),
+  integration::QuadratureGrid< REAL > const & LVARRAY_UNUSED_ARG( quadratureGrid ),
   int const Z,
   HydrogenLikeBasisFunction< REAL > const & b1,
   HydrogenLikeBasisFunction< REAL > const & b2 )

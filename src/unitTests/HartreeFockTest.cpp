@@ -172,213 +172,27 @@ int createBasisFunctions(
 /**
  * 
  */
-Array4d< std::complex< double > > computeR(
-  integration::QMCGrid< double, 3 > const & r1Grid,
-  integration::QMCGrid< double, 2 > const & r2Grid )
+int createBasisFunctions(
+  int const nMax,
+  int const lMax,
+  int const Z,
+  std::vector< HydrogenLikeBasisFunction< double > > & basisFunctions )
 {
-  TCSCF_MARK_FUNCTION;
+  basisFunctions.clear();
 
-  return integration::integrateAllR1R2< false, double >( r1Grid, r2Grid,
-    [] ( Cartesian< double > const & r1, Cartesian< double > const & r2 )
-    {
-      double const r12 = (r1 - r2).r();
-      return 1 / r12;
-    }
-  );
-}
-
-/**
- * 
- */
-Array4d< std::complex< double > > computeLOppositeSpin(
-  integration::QMCGrid< double, 3 > const & r1Grid,
-  integration::QMCGrid< double, 2 > const & r2Grid,
-  jastrowFunctions::Ochi< double > const & u )
-{
-  TCSCF_MARK_FUNCTION;
-
-  return integration::integrateAllR1R2< false, double >( r1Grid, r2Grid,
-    [&u] ( Cartesian< double > const & r1, Cartesian< double > const & r2 )
-    {
-      return u.laplacian( r1, r2, false );
-    }
-  );
-}
-
-/**
- * 
- */
-Array4d< std::complex< double > > computeGOppositeSpin(
-  integration::QMCGrid< double, 3 > const & r1Grid,
-  integration::QMCGrid< double, 2 > const & r2Grid,
-  jastrowFunctions::Ochi< double > const & u )
-{
-  TCSCF_MARK_FUNCTION;
-
-  return integration::integrateAllR1R2< false, double >( r1Grid, r2Grid,
-    [&u] ( Cartesian< double > const & r1, Cartesian< double > const & r2 )
-    {
-      Cartesian< double > const grad1 = u.gradient( r1, r2, false );
-      return dot( grad1, grad1 );
-    }
-  );
-}
-
-/**
- * 
- */
-Array4d< std::complex< double > > computeDOppositeSpin(
-  integration::QMCGrid< double, 3 > const & r1Grid,
-  integration::QMCGrid< double, 2 > const & r2Grid,
-  jastrowFunctions::Ochi< double > const & u )
-{
-  TCSCF_MARK_FUNCTION;
-  
-  return integration::integrateAllR1R2< true, double >( r1Grid, r2Grid,
-    [&u] ( Cartesian< double > const & r1, Cartesian< double > const & r2 )
-    {
-      return u.gradient( r2, r1, false );
-    }
-  );
-}
-
-
-void compareLAndD(
-  ArrayView4d< std::complex< double > const > const & LOppo,
-  ArrayView4d< std::complex< double > const > const & DPOppo )
-{
-  TCSCF_MARK_FUNCTION;
-  LVARRAY_ERROR( "No longer using DPOppo, need to fix." );
-
-  IndexType const nBasis = LOppo.size( 0 );
-  Array4d< std::complex< double > > LFromD( nBasis, nBasis, nBasis, nBasis );
-
-  for( int j = 0; j < nBasis; ++j )
+  for( int n = 1; n <= nMax; ++n )
   {
-    for( int ell = 0; ell < nBasis; ++ell )
+    for( int l = 0; l <= std::min( lMax, n ); ++l )
     {
-      for( int i = 0; i < nBasis; ++i )
+      for( int m = -l; m <= l; ++m )
       {
-        for( int m = 0; m < nBasis; ++m )
-        {
-          LFromD( j, ell, i, m ) = - conj( DPOppo( m, i, ell, j ) ) - DPOppo( ell, j, m, i );
-        }
+        basisFunctions.emplace_back( Z, n, l, m );
       }
     }
   }
 
-  checkDiffs< Serial >( LOppo, LFromD.toViewConst(), 0, 1e-4 );
-  abort();
+  return basisFunctions.size();
 }
-
-
-
-/**
- * 
- */
-void computeH2Prime(
-  ArrayView4d< std::complex< double > > const & h2PrimeOppo,
-  ArrayView4d< std::complex< double > > const & h2PrimeSame,
-  ArrayView4d< std::complex< double > const > const & R,
-  ArrayView4d< std::complex< double > const > const & GOppo,
-  ArrayView4d< std::complex< double > const > const & DOppo )
-{
-  TCSCF_MARK_FUNCTION;
-
-  int const nBasis = h2PrimeOppo.size( 0 );
-
-  for( int dim = 0; dim < 4; ++dim )
-  {
-    LVARRAY_ERROR_IF_NE( h2PrimeOppo.size( dim ), nBasis );
-    LVARRAY_ERROR_IF_NE( h2PrimeSame.size( dim ), nBasis );
-    LVARRAY_ERROR_IF_NE( R.size( dim ), nBasis );
-    LVARRAY_ERROR_IF_NE( GOppo.size( dim ), nBasis );
-  }
-
-  for( int j = 0; j < nBasis; ++j )
-  {
-    for( int ell = 0; ell < nBasis; ++ell )
-    {
-      for( int i = 0; i < nBasis; ++i )
-      {
-        for( int m = 0; m < nBasis; ++m )
-        {
-          std::complex< double > const h2_oppo_jl_im =
-            R( j, ell, i, m ) - GOppo( j, ell, i, m ) + DOppo( j, ell, i, m ) - conj( DOppo( i, m, j, ell ) );
-          std::complex< double > const h2_oppo_lj_mi =
-            R( ell, j, m, i ) - GOppo( ell, j, m, i ) + DOppo( ell, j, m, i ) - conj( DOppo( m, i, ell, j ) );
-
-          h2PrimeOppo( j, ell, i, m ) = h2_oppo_jl_im + h2_oppo_lj_mi;
-
-          std::complex< double > const h2_same_jl_im =
-            R( j, ell, i, m ) - GOppo( j, ell, i, m ) / 4 + DOppo( j, ell, i, m ) / 2 - conj( DOppo( i, m, j, ell ) ) / 2;
-          std::complex< double > const h2_same_lj_mi =
-            R( ell, j, m, i ) - GOppo( ell, j, m, i ) / 4 + DOppo( ell, j, m, i ) / 2 - conj( DOppo( m, i, ell, j ) ) / 2;
-          
-          h2PrimeSame( j, ell, i, m ) = h2_same_jl_im + h2_same_lj_mi;
-        }
-      }
-    }
-  }
-}
-
-void computeH2PrimeXXX(
-  ArrayView4d< std::complex< double > > const & h2PrimeOppo,
-  ArrayView4d< std::complex< double > > const & h2PrimeSame,
-  ArrayView4d< std::complex< double > const > const & R,
-  ArrayView4d< std::complex< double > const > const & GOppo,
-  ArrayView4d< std::complex< double > const > const & LOppo )
-{
-  TCSCF_MARK_FUNCTION;
-
-  int const nBasis = h2PrimeOppo.size( 0 );
-
-  for( int dim = 0; dim < 4; ++dim )
-  {
-    LVARRAY_ERROR_IF_NE( h2PrimeOppo.size( dim ), nBasis );
-    LVARRAY_ERROR_IF_NE( h2PrimeSame.size( dim ), nBasis );
-    LVARRAY_ERROR_IF_NE( R.size( dim ), nBasis );
-    LVARRAY_ERROR_IF_NE( GOppo.size( dim ), nBasis );
-  }
-
-  for( int j = 0; j < nBasis; ++j )
-  {
-    for( int ell = 0; ell < nBasis; ++ell )
-    {
-      for( int i = 0; i < nBasis; ++i )
-      {
-        for( int m = 0; m < nBasis; ++m )
-        {
-          std::complex< double > const h2_oppo_jl_im =
-            R( j, ell, i, m ) + LOppo( j, ell, i, m ) - GOppo( j, ell, i, m );
-          std::complex< double > const h2_oppo_lj_mi =
-            R( ell, j, m, i ) + LOppo( ell, j, m, i ) - GOppo( ell, j, m, i );
-
-          h2PrimeOppo( j, ell, i, m ) = h2_oppo_jl_im + h2_oppo_lj_mi;
-
-          std::complex< double > const h2_same_jl_im =
-            R( j, ell, i, m ) + LOppo( j, ell, i, m ) / 2 - GOppo( j, ell, i, m ) / 4;
-          std::complex< double > const h2_same_lj_mi =
-            R( ell, j, m, i ) + LOppo( ell, j, m, i ) / 2 - GOppo( ell, j, m, i ) / 4;
-          
-          h2PrimeSame( j, ell, i, m ) = h2_same_jl_im + h2_same_lj_mi;
-        }
-      }
-    }
-  }
-}
-
-// void computeH3Prime(
-//   ArrayView6d< std::complex< double > > const & h3PrimeUpUpUp,
-//   ArrayView6d< std::complex< double > > const & hePrimeUpDownDown,
-//   ArrayView6d< std::complex< double > > const & h3PrimeUpUpDown,
-//   ArrayView6d< std::complex< double > > const & h3PrimeUpDownUp,
-//   ArrayView6d< std::complex< double > const > const & integrals )
-// {
-
-// }
-
-
 
 template< typename REAL >
 void precompute(
@@ -463,24 +277,26 @@ void precomputeTranscorrelated(
 
 template< typename HF_CALCULATOR >
 void ochiNewHF(
+  int const Z,
+  double const hfEnergy,
+  double const energy,
   int const nMax,
   int const lMax,
-  double const initialAlpha,
+  double const alpha,
   int const r1GridSize,
   int const r2GridSize )
 {
   using Real = double;
   using Complex = std::complex< Real >;
 
-  int const Z = 2;
-  int const nSpinUp = 1;
-  int const nSpinDown = 1;
+  int const nSpinUp = Z / 2;
+  int const nSpinDown = Z - nSpinUp;
 
   std::vector< OchiBasisFunction< Real > > basisFunctions;
-  int const nBasis = createBasisFunctions( nMax, lMax, initialAlpha, basisFunctions );
+  int const nBasis = createBasisFunctions( nMax, lMax, alpha, basisFunctions );
 
-  LVARRAY_LOG( "nMax = " << nMax << ", lMax = " << lMax << ", nBasis = " << nBasis <<
-                ", r1 grid size = " << r1GridSize << ", r2 grid size = " << r2GridSize << ", alpha = " << initialAlpha );
+  LVARRAY_LOG( "Z = " << Z << ", nMax = " << nMax << ", lMax = " << lMax << ", nBasis = " << nBasis <<
+                ", r1 grid size = " << r1GridSize << ", r2 grid size = " << r2GridSize << ", alpha = " << alpha );
 
   HF_CALCULATOR hfCalculator( nSpinUp, nSpinDown, nBasis );
 
@@ -504,59 +320,6 @@ void ochiNewHF(
 
   jastrowFunctions::Ochi< Real > const u { a, a12, c, S };
   
-  Real alpha = initialAlpha;
-  bool converged = false;
-  int const maxIter = 30;
-  int iter = 0;
-  {
-    integration::QMCGrid< Real, 3 > r1Grid( r1GridSize );
-    integration::QMCGrid< Real, 3 > r3Grid( r1GridSize );
-    integration::QMCGrid< Real, 2 > r2Grid( r2GridSize );
-
-    for( iter = 0; iter < maxIter; ++iter )
-    {
-      createBasisFunctions( nMax, lMax, alpha, basisFunctions );
-
-      r1Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
-      r3Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
-      r2Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
-
-      Array2d< Real > const coreMatrix( nBasis, nBasis );
-      fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
-
-      if constexpr ( hfCalculator.needsGradients() )
-      {
-        precomputeTranscorrelated( FjiSame, FjiOppo, VjiSame, VjiOppo, u, r1Grid, r2Grid, r3Grid );
-        auto energy = hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame, FjiOppo, VjiSame, VjiOppo, basisFunctions );
-        LVARRAY_LOG_VAR( energy );
-      }
-      else
-      {
-        precompute( FjiSame, r1Grid, r2Grid );
-        hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame, basisFunctions );
-      }
-
-      Real const newAlpha = std::sqrt( -2 * hfCalculator.highestOccupiedOrbitalEnergy() );
-
-      if( LOG_LEVEL > 1 )
-      {
-        LVARRAY_LOG( "\t\t number of loops to SCF convergence = " << hfCalculator.numberOfConvergenceLoops() );
-      }
-
-      if( std::abs( newAlpha - alpha ) < 1e-6 )
-      {
-        converged = true;
-        break;
-      }
-
-      alpha = newAlpha;
-    }
-  }
-
-  LVARRAY_ERROR_IF( !converged, "Did not converge." );
-
-  createBasisFunctions( nMax, lMax, alpha, basisFunctions );
-
   Array2d< Real > const coreMatrix( nBasis, nBasis );
   fillCoreMatrix( coreGrid, Z, basisFunctions, coreMatrix );
 
@@ -575,7 +338,6 @@ void ochiNewHF(
     {
       precomputeTranscorrelated( FjiSame, FjiOppo, VjiSame, VjiOppo, u, r1Grid, r2Grid, r3Grid );
       energies.emplace_back( hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame, FjiOppo, VjiSame, VjiOppo, basisFunctions ) );
-      LVARRAY_LOG_VAR( energies.back() );
     }
     else
     {
@@ -584,34 +346,60 @@ void ochiNewHF(
     }
   }
 
-  constexpr Real HF_LIMIT = -2.861679995612;
   auto const [mean, standardDev] = meanAndStd( energies.toViewConst() );
-  double const error = std::abs( HF_LIMIT - mean );
-  printf( "energy = %.6F +/- %.2e Ht, error = %.2e Ht, alpha = %.6F, number of alpha iterations = %d\n", mean, standardDev, error, alpha, iter + 1 );
+  double const error = std::abs( energy - mean );
+  double const correlationEnergy = energy - hfEnergy;
+  double const percentOfCorrelation = (mean - hfEnergy) / correlationEnergy * 100;
+  printf( "\tenergy = %.6F +/- %.2e Ht, error = %.2e Ht, percent of correlation = %.1F%%\n", mean, standardDev, error, percentOfCorrelation );
 }
 
-
+// Taken from https://aip.scitation.org/doi/pdf/10.1063/1.458750
+std::vector< std::tuple< int, double, double, double > > atoms {
+    { 2, 1.355,  -2.861700, -2.903700 }
+  // , { 3,  -7.432700, -7.478100 }
+  // , { 4,  -14.57300, -14.66730 }
+  // , { 5, 2.400,  -24.52910, -24.65390 }
+  // , { 6,  -37.68860, -37.84510 }
+  // , { 7,  -54.40090, -54.58950 }
+  // , { 8,  -74.80940, -75.06730 }
+  // , { 9,  -99.40930, -99.73130 }
+  // , { 10, -128.5471, -128.9370 }
+};
 
 
 TEST( NewHartreeFock, RestrictedClosedShell )
 {
   TCSCF_MARK_SCOPE( "New restricted closed shell" );
 
-  ochiNewHF< RCSHartreeFock< std::complex< double > > >( clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
+  for( auto const & [Z, alpha, hfEnergy, energy] : atoms )
+  {
+    if( Z % 2 != 0 )
+    {
+      continue;
+    }
+
+    ochiNewHF< RCSHartreeFock< std::complex< double > > >( Z, hfEnergy, energy, clo.nMax, clo.lMax, alpha, clo.r1GridSize, clo.r2GridSize );
+  }
 }
 
 TEST( NewHartreeFock, UnrestrictedOpenShell )
 {
   TCSCF_MARK_SCOPE( "New unrestricted open shell" );
 
-  ochiNewHF< UOSHartreeFock< std::complex< double > > >( clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
+  for( auto const & [Z, alpha, hfEnergy, energy] : atoms )
+  {
+    ochiNewHF< UOSHartreeFock< std::complex< double > > >( Z, hfEnergy, energy, clo.nMax, clo.lMax, alpha, clo.r1GridSize, clo.r2GridSize );
+  }
 }
 
 TEST( NewHartreeFock, Transcorrelated )
 {
   TCSCF_MARK_SCOPE( "New transcorrelated" );
 
-  ochiNewHF< TCHartreeFock< std::complex< double > > >( clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
+  for( auto const & [Z, alpha, hfEnergy, energy] : atoms )
+  {
+    ochiNewHF< TCHartreeFock< std::complex< double > > >( Z, hfEnergy, energy, clo.nMax, clo.lMax, alpha, clo.r1GridSize, clo.r2GridSize );
+  }
 }
 
 } // namespace tcscf::testing

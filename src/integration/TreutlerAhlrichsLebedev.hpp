@@ -36,8 +36,8 @@ struct TreutlerAhlrichsLebedev
   constexpr IndexType numPoints() const
   { return m_radialGrid.size( 1 ) * m_angularGrid.size( 1 ); }
 
-  Array2d< Real > const m_radialGrid;
-  Array2d< Real > const m_angularGrid;
+  QuadratureGrid< Real > const m_radialGrid;
+  QuadratureGrid< Real > const m_angularGrid;
 };
 
 /**
@@ -48,8 +48,11 @@ auto integrate(
   TreutlerAhlrichsLebedev< REAL > const & integrator,
   F && f ) -> decltype( f( CArray< REAL, 3 > {} ) * REAL {} )
 {
-  ArrayView2d< REAL const > const & radialGrid = integrator.m_radialGrid;
-  ArrayView2d< REAL const > const & angularGrid = integrator.m_angularGrid;
+  ArrayView2d< REAL const > const & radialPoints = integrator.m_radialGrid.points;
+  ArrayView1d< REAL const > const & radialWeights = integrator.m_radialGrid.weights;
+
+  ArrayView2d< REAL const > const & angularGrid = integrator.m_angularGrid.points;
+  ArrayView1d< REAL const > const & angularWeights = integrator.m_angularGrid.weights;
 
   using AnswerType = decltype( f( CArray< REAL, 3 > {} ) * REAL {} );
   AnswerType answer = 0;
@@ -58,14 +61,13 @@ auto integrate(
     CArray< REAL, 3 > coords{ 0, angularGrid( 0, i ), angularGrid( 1, i ) };
 
     AnswerType tmp = 0;
-    for( IndexType j = 0; j < radialGrid.size( 1 ); ++j )
+    for( IndexType j = 0; j < radialPoints.size( 1 ); ++j )
     {
-      coords[ 0 ] = radialGrid( 0, j );
-      REAL const weight = radialGrid( 1, j );
-      tmp = tmp + weight * f( coords );
+      coords[ 0 ] = radialPoints( 0, j );
+      tmp = tmp + radialWeights( j ) * f( coords );
     }
 
-    answer = answer + tmp * angularGrid( 2, i );
+    answer = answer + angularWeights( i ) * tmp;
   }
 
   return answer;

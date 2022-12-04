@@ -805,39 +805,60 @@ void ensureNoLMOverlap(
   );
 }
 
+template< typename T, typename U >
+void enforceOneElectronSymmetry(
+  ArrayView3d< T, 2 > const & op,
+  ArrayView2d< U const > const & oneElectronTerms )
+{
+  TCSCF_MARK_FUNCTION;
+
+  int const nSpin = op.size( 0 );
+  IndexType const nBasis = op.size( 1 );
+
+  CHECK_BOUNDS_3( op, nSpin, nBasis, nBasis );
+  CHECK_BOUNDS_2( oneElectronTerms, nBasis, nBasis );
+
+  forAll< DefaultPolicy< ParallelHost > >( oneElectronTerms.size(),
+    [&] ( IndexType const idx )
+    {
+      for( int spin = 0; spin < nSpin; ++spin )
+      {
+        op[ spin ].data()[ idx ] *= std::abs( oneElectronTerms.data()[ idx ] ) > 0;
+      }
+    }
+  );
+}
+
 } // namespace internal
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 template< typename T >
 RealType< T > RCSHartreeFock< T >::compute(
-  bool const orthogonal,
-  ArrayView2d< T const > const & overlap,
+  ArrayView2d< T const, 0 > const & overlap,
   ArrayView2d< Real const > const & oneElectronTerms,
   integration::QMCGrid< Real, 3 > const & r1Grid,
   ArrayView3d< Real const > const & Fji,
-  std::vector< BasisFunctionType< Real > > const & basisFunctions )
+  bool const respectOneElectronSymmetry )
 {
   TCSCF_MARK_FUNCTION;
 
-  LVARRAY_ERROR_IF_NE( oneElectronTerms.size( 1 ), basisSize );
+  CHECK_BOUNDS_2( overlap, basisSize, basisSize );
+  CHECK_BOUNDS_2( oneElectronTerms, basisSize, basisSize );
   LVARRAY_ERROR_IF_NE( r1Grid.nBasis(), basisSize );
-
-  if( !orthogonal )
-  {
-    LVARRAY_ERROR_IF_NE( overlap.size( 0 ), basisSize );
-    LVARRAY_ERROR_IF_NE( overlap.size( 1 ), basisSize );
-  }
+  CHECK_BOUNDS_3( Fji, r1Grid.nGrid(), basisSize, basisSize );
 
   LvArray::dense::EigenDecompositionOptions eigenDecompositionOptions(
     LvArray::dense::EigenDecompositionOptions::EIGENVALUES_AND_RIGHT_VECTORS,
-    1,
-    nElectrons / 2 );
+    LvArray::dense::EigenDecompositionOptions::Ax_eq_lambdaBx );
 
   Real energy = std::numeric_limits< Real >::max();
 
   Array1d< T > const Faa( r1Grid.nGrid() );
   Array2d< T > const Fai( r1Grid.nGrid(), basisSize );
   Array3d< T > const twoElectronTerms( 1, basisSize, basisSize );
+
+  // The overlap gets destroyed in the eigensolve, so we need to copy into this.
+  Array2d< T, RAJA::PERM_JI > const BMatrix( basisSize, basisSize );
 
   for( _iter = 0; _iter < 50; ++_iter )
   {
@@ -869,7 +890,10 @@ RealType< T > RCSHartreeFock< T >::compute(
       );
     }
 
-    internal::ensureNoLMOverlap( twoElectronTerms, basisFunctions );
+    if( respectOneElectronSymmetry )
+    {
+      internal::enforceOneElectronSymmetry( twoElectronTerms, oneElectronTerms.toViewConst() );
+    }
 
     Real const newEnergy = 2 * internal::constructSCFOperator(
       fockOperator,
@@ -885,24 +909,24 @@ RealType< T > RCSHartreeFock< T >::compute(
 
     energy = newEnergy;
 
-    if( orthogonal )
     {
-      LvArray::dense::heevr(
+      TCSCF_MARK_SCOPE( eigensolve );
+
+      LvArray::memcpy< 0, 0 >( BMatrix.toView(), {}, overlap.toViewConst(), {} );
+
+      LvArray::dense::hegvd(
         LvArray::dense::BuiltInBackends::LAPACK,
         eigenDecompositionOptions,
         fockOperator[ 0 ],
+        BMatrix.toSlice(),
         eigenvalues.toSlice(),
-        eigenvectors.toSlice(),
-        _support.toSlice(),
         _workspace,
         LvArray::dense::SymmetricMatrixStorageType::UPPER_TRIANGULAR );
-    }
-    else
-    {
-      LVARRAY_ERROR( "Generalized eigenvalue problem not yet supported." );
+
+      std::swap( fockOperator, eigenvectors );
     }
 
-    internal::getNewDensity( nElectrons / 2, density[ 0 ], eigenvectors.toSliceConst() );
+    internal::getNewDensity( nElectrons / 2, density[ 0 ], eigenvectors[ 0 ].toSliceConst() );
   }
 
   LVARRAY_ERROR( "Did not converge :(" );

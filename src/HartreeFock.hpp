@@ -200,7 +200,7 @@ struct RCSHartreeFock
     density( 1, numBasisFunctions, numBasisFunctions ),
     fockOperator( 1, numBasisFunctions, numBasisFunctions ),
     eigenvalues( numBasisFunctions ),
-    eigenvectors( numBasisFunctions, numElectrons / 2 ),
+    eigenvectors( 1, numBasisFunctions, numBasisFunctions ),
     _support( 2 * numBasisFunctions )
   {
     LVARRAY_ERROR_IF_NE( numElectrons % 2, 0 );
@@ -225,12 +225,11 @@ struct RCSHartreeFock
   /**
    */
   RealType< T > compute(
-    bool const orthogonal,
-    ArrayView2d< T const > const & overlap,
+    ArrayView2d< T const, 0 > const & overlap,
     ArrayView2d< Real const > const & oneElectronTerms,
     integration::QMCGrid< Real, 3 > const & r1Grid,
     ArrayView3d< Real const > const & FjiSame,
-    std::vector< BasisFunctionType< Real > > const & basisFunctions );
+    bool const respectOneElectronSymmetry );
 
   /**
    */
@@ -242,9 +241,9 @@ struct RCSHartreeFock
   int const nElectrons;
   int const basisSize;
   Array3d< T > const density;
-  Array3d< T, RAJA::PERM_IKJ > const fockOperator;
+  Array3d< T, RAJA::PERM_IKJ > fockOperator;
   Array1d< Real > const eigenvalues;
-  Array2d< T, RAJA::PERM_JI > const eigenvectors;
+  Array3d< T, RAJA::PERM_IKJ > eigenvectors;
 
 private:
   int _iter = 0;

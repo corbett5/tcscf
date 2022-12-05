@@ -8,27 +8,6 @@
 #include "dense/eigenDecomposition.hpp"
 
 
-#define CHECK_BOUNDS_1( array, size0 ) \
-  LVARRAY_ERROR_IF_NE( array.size( 0 ), size0 )
-
-#define CHECK_BOUNDS_2( array, size0, size1 ) \
-  LVARRAY_ERROR_IF_NE( array.size( 0 ), size0 ); \
-  LVARRAY_ERROR_IF_NE( array.size( 1 ), size1 )
-
-#define CHECK_BOUNDS_3( array, size0, size1, size2 ) \
-  LVARRAY_ERROR_IF_NE( array.size( 0 ), size0 ); \
-  LVARRAY_ERROR_IF_NE( array.size( 1 ), size1 ); \
-  LVARRAY_ERROR_IF_NE( array.size( 2 ), size2 )
-
-#define CHECK_BOUNDS_6( array, size0, size1, size2, size3, size4, size5 ) \
-  LVARRAY_ERROR_IF_NE( array.size( 0 ), size0 ); \
-  LVARRAY_ERROR_IF_NE( array.size( 1 ), size1 ); \
-  LVARRAY_ERROR_IF_NE( array.size( 2 ), size2 ); \
-  LVARRAY_ERROR_IF_NE( array.size( 3 ), size3 ); \
-  LVARRAY_ERROR_IF_NE( array.size( 4 ), size4 ); \
-  LVARRAY_ERROR_IF_NE( array.size( 5 ), size5 )
-
-
 namespace tcscf
 {
 

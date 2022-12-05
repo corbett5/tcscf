@@ -48,6 +48,9 @@ constexpr std::complex< T > I = std::complex< T >( 0, 1 );
 template< typename T >
 constexpr bool isComplex = internal::IsComplex< T >::value;
 
+template< typename T >
+using RealType = decltype( std::real( T {} ) );
+
 /**
  */
 template< typename T >

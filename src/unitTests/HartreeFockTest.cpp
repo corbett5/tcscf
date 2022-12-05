@@ -11,6 +11,8 @@
 
 #include "testingCommon.hpp"
 
+#include "gsl/gsl_multimin.h"
+
 namespace tcscf::testing
 {
 
@@ -405,6 +407,7 @@ double ochiNewHF(
 }
 
 
+
 void optimizeOrbitalExponents(
   int const Z,
   double const hfEnergy,
@@ -448,6 +451,89 @@ void optimizeOrbitalExponents(
 }
 
 
+
+void optimizeOrbitalExponents(
+  int const Z,
+  std::vector< SlaterTypeOrbital< double > > & basisFunctions )
+{
+  /* Starting point */
+  gsl_vector * alphas = gsl_vector_alloc( basisFunctions.size() );
+  for( std::size_t i = 0; i < basisFunctions.size(); ++i )
+  {
+    gsl_vector_set( alphas, i, basisFunctions[ i ].alpha );
+  }
+
+  /* Set initial step sizes to 1 */
+  gsl_vector * ss = gsl_vector_alloc( basisFunctions.size() );
+  gsl_vector_set_all( ss, 1.0 );
+
+  /* Initialize method and iterate */
+  std::pair< std::vector< SlaterTypeOrbital< double > > &, int > params{ basisFunctions, Z };
+  gsl_multimin_function minex_func;
+  minex_func.n = 2;
+  minex_func.params = &params;
+
+  minex_func.f = [] ( gsl_vector const * x, void * params )
+  {
+    auto * paramsT = reinterpret_cast< std::pair< std::vector< SlaterTypeOrbital< double > > &, int > * >( params );
+    
+    std::vector< SlaterTypeOrbital< double > > & basisFunctions = paramsT->first;
+    int Z = paramsT->second;
+    
+    for( std::size_t i = 0; i < basisFunctions.size(); ++i )
+    {
+      basisFunctions[ i ].resetOrbitalExponent( gsl_vector_get( x, i ) );
+    }
+
+    return ochiNewHF< RCSHartreeFock< std::complex< double > > >( Z, -2.861700, -2.903700, basisFunctions, 1000, 2000 );
+  };
+
+  gsl_multimin_fminimizer * s = gsl_multimin_fminimizer_alloc( gsl_multimin_fminimizer_nmsimplex2, 2 );
+  gsl_multimin_fminimizer_set( s, &minex_func, alphas, ss );
+ 
+  int status;
+  for( int iter = 0; iter < 100; ++iter )
+  {
+    status = gsl_multimin_fminimizer_iterate( s );
+
+    if( status )
+    {
+      break;
+    }
+
+    double size = gsl_multimin_fminimizer_size( s );
+    status = gsl_multimin_test_size( size, 1e-2 );
+
+    printf ("%5d %10.3e %10.3e f() = %7.3f size = %.3f\n",
+            iter,
+            gsl_vector_get (s->x, 0),
+            gsl_vector_get (s->x, 1),
+            s->fval, size);
+
+    if (status == GSL_SUCCESS)
+    {
+      printf ("converged to minimum\n");
+    }
+    if( status != GSL_CONTINUE )
+    {
+      break;
+    }
+  }
+
+  for( std::size_t i = 0; i < basisFunctions.size(); ++i )
+  {
+    basisFunctions[ i ].resetOrbitalExponent( gsl_vector_get( s->x, i ) );
+    LVARRAY_LOG( basisFunctions[ i ].alpha );
+  }
+
+  gsl_vector_free( alphas );
+  gsl_vector_free( ss );
+  gsl_multimin_fminimizer_free( s );
+}
+
+
+
+
 // Taken from https://aip.scitation.org/doi/pdf/10.1063/1.458750
 std::vector< std::tuple< int, double, double, double > > atoms {
     { 2, 1.355,  -2.861700, -2.903700 }
@@ -473,7 +559,14 @@ TEST( NewHartreeFock, RestrictedClosedShell )
       continue;
     }
 
-    optimizeOrbitalExponents( Z, hfEnergy, energy, clo.r1GridSize, clo.r2GridSize );
+    std::vector< SlaterTypeOrbital< double > > basisFunctions {
+      { 2.96099, 1, 0, 0 },
+      { 1.45224, 1, 0, 0 }
+    };
+
+    optimizeOrbitalExponents( Z, basisFunctions );
+
+    // optimizeOrbitalExponents( Z, hfEnergy, energy, clo.r1GridSize, clo.r2GridSize );
     // ochiNewHF< RCSHartreeFock< std::complex< double > > >( Z, hfEnergy, energy, clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
   }
 }

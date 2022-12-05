@@ -1,6 +1,8 @@
 #pragma once
 
-#include "LvArrayInterface.hpp"
+#include <RAJA/RAJA.hpp>
+
+#include <complex>
 
 namespace tcscf
 {

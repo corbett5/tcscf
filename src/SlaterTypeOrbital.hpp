@@ -38,6 +38,15 @@ struct SlaterTypeOrbital
   /**
    * 
    */
+  void resetOrbitalExponent( Real const newAlpha )
+  {
+    alpha = newAlpha;
+    normalization = std::pow( 2 * alpha, n ) * std::sqrt( 2 * alpha / factorial( 2 * n ) );
+  }
+
+  /**
+   * 
+   */
   Complex operator()( Spherical< Real > const & r ) const
   { return radialComponent( r.r() ) * sphericalHarmonic( l, m, r.theta(), r.phi() ); }
 
@@ -56,11 +65,11 @@ struct SlaterTypeOrbital
     return {};
   }
 
-  Real const alpha;
-  int const n;
-  int const l;
-  int const m;
-  Real const normalization;
+  Real alpha;
+  int n;
+  int l;
+  int m;
+  Real normalization;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

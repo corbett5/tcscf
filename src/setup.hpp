@@ -9,9 +9,9 @@ struct CommandLineOptions
 {
   int nMax;
   int lMax;
-  double initialAlpha;
-  int r1GridSize;
-  int r2GridSize;
+  double initialAlpha = -1;
+  int r1GridSize = -1;
+  int r2GridSize = -1;
   std::string caliperArgs = "";
   bool suppressMoveLogging = false;
 };

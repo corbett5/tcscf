@@ -61,8 +61,47 @@ struct SlaterTypeOrbital
    */
   Cartesian< Complex > gradient( Spherical< Real > const & r ) const
   {
-    LVARRAY_ERROR( "Uh oh" << r.x() );
-    return {};
+    Real const radial = radialComponent( r.r() );
+    Complex const Ylm = sphericalHarmonic( l, m, r.theta(), r.phi() );
+
+    Real const dRadialPart = ((n - 1) / r.r() - alpha) * radial;
+
+    Complex const Ylmp1 = (l != m) * std::sqrt((l - m) * (l + m + 1)) * cExp( -r.phi() ) * sphericalHarmonic( l, m + 1, r.theta(), r.phi() );
+    
+    Complex const rHat = dRadialPart * Ylm;
+    Complex const thetaHat = (m * Ylm / std::tan( r.theta() ) + Ylmp1) * radial / r.r();
+    Complex const phiHat = I< Real > * m * Ylm * radial / (r.r() * std::sin( r.theta() ));
+
+    Cartesian< Complex > answer {};
+    
+    Cartesian< Real > rHatC
+      { std::cos( r.phi() ) * std::sin( r.theta() ),
+        std::sin( r.phi() ) * std::sin( r.theta() ),
+        std::cos( r.theta() ) };
+
+    answer._x += rHat * rHatC.x();
+    answer._y += rHat * rHatC.y();
+    answer._z += rHat * rHatC.z();
+
+    Cartesian< Real > thetaHatC
+    { std::cos( r.phi() ) * std::cos( r.theta() ),
+      std::sin( r.phi() ) * std::cos( r.theta() ),
+      -std::sin( r.theta() ) };
+
+    answer._x += thetaHat * thetaHatC.x();
+    answer._y += thetaHat * thetaHatC.y();
+    answer._z += thetaHat * thetaHatC.z();
+
+    Cartesian< Real > phiHatC
+    { -std::sin( r.phi() ),
+      std::cos( r.phi() ),
+      0 };
+
+    answer._x += phiHat * phiHatC.x();
+    answer._y += phiHat * phiHatC.y();
+    answer._z += phiHat * phiHatC.z();
+
+    return answer;
   }
 
   Real alpha;
@@ -128,6 +167,16 @@ REAL coreMatrixElement(
     (l * (l + 1) - n * (n - 1)) * internal::overlapNonNormalized( nSum - 2, alphaSum )
     + 2 * (n * alpha - Z) * internal::overlapNonNormalized( nSum - 1, alphaSum )
     - std::pow( alpha, 2 ) * internal::overlapNonNormalized( nSum, alphaSum ) );
+}
+
+template< typename REAL >
+REAL coreMatrixElement(
+  integration::QuadratureGrid< REAL > const &,
+  int const Z,
+  SlaterTypeOrbital< REAL > const & b1,
+  SlaterTypeOrbital< REAL > const & b2 )
+{
+  return coreMatrixElement( Z, b1, b2 );
 }
 
 } // namespace tcscf

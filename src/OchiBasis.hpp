@@ -116,6 +116,17 @@ struct OchiBasisFunction
  * 
  */
 template< typename REAL >
+REAL overlap(
+  OchiBasisFunction< REAL > const & b1,
+  OchiBasisFunction< REAL > const & b2 )
+{
+  return (b1.n == b2.n) && (b1.l == b2.l) && (b1.m == b2.m);
+}
+
+/**
+ * 
+ */
+template< typename REAL >
 REAL coreMatrixElement(
   integration::QuadratureGrid< REAL > const & quadratureGrid,
   int const Z,

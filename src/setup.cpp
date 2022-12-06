@@ -81,7 +81,7 @@ struct Arg : public option::Arg
 
 CommandLineOptions parseCommandLineOptions( int argc, char ** argv )
 {
-  CommandLineOptions commandLineOptions;
+  CommandLineOptions commandLineOptions {};
 
   // Set the options structs and parse
   enum optionIndex

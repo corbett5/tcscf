@@ -16,7 +16,7 @@
 namespace tcscf::testing
 {
 
-CommandLineOptions clo;
+CommandLineOptions clo {};
 
 int LOG_LEVEL = 0;
 
@@ -336,16 +336,15 @@ double ochiNewHF(
   int const nSpinUp = Z / 2;
   int const nSpinDown = Z - nSpinUp;
 
+  // std::vector< OchiBasisFunction< double > > basisFunctions;
+  // createBasisFunctions( 9, 0, 1.355, basisFunctions );
+
   int const nBasis = basisFunctions.size();
 
-  // LVARRAY_LOG( "Z = " << Z << ", nMax = " << nMax << ", lMax = " << lMax << ", nBasis = " << nBasis <<
-  //               ", r1 grid size = " << r1GridSize << ", r2 grid size = " << r2GridSize << ", alpha = " << alpha );
+  LVARRAY_LOG( "Z = " << Z << ", nBasis = " << nBasis <<
+                ", r1 grid size = " << r1GridSize << ", r2 grid size = " << r2GridSize );
 
   HF_CALCULATOR hfCalculator( nSpinUp, nSpinDown, nBasis );
-
-  integration::QuadratureGrid< Real > const coreGrid = integration::createGrid(
-    integration::ChebyshevGauss< Real >( 1000 ),
-    integration::changeOfVariables::TreutlerAhlrichsM4< Real >( 1, 0.9 ) );
   
   Array3d< Real > FjiSame;
   Array3d< Real > FjiOppo;
@@ -365,35 +364,64 @@ double ochiNewHF(
   
   Array2d< Complex, RAJA::PERM_JI > const overlapMatrix( nBasis, nBasis );
   Array2d< Real > const coreMatrix( nBasis, nBasis );
-  for( int i = 0; i < nBasis; ++i )
   {
-    for( int j = 0; j < nBasis; ++j )
+    integration::QuadratureGrid< Real > const coreGrid = integration::createGrid(
+      integration::ChebyshevGauss< Real >( 1000 ),
+      integration::changeOfVariables::TreutlerAhlrichsM4< Real >( 1, 0.9 ) );
+    for( int i = 0; i < nBasis; ++i )
     {
-      overlapMatrix( i, j ) = overlap( basisFunctions[ i ], basisFunctions[ j ] );
-      coreMatrix( i, j ) = coreMatrixElement( Z, basisFunctions[ i ], basisFunctions[ j ] );
+      for( int j = 0; j < nBasis; ++j )
+      {
+        overlapMatrix( i, j ) = overlap( basisFunctions[ i ], basisFunctions[ j ] );
+        coreMatrix( i, j ) = coreMatrixElement( coreGrid, Z, basisFunctions[ i ], basisFunctions[ j ] );
+      }
     }
   }
 
+  int convergenceRepeats = 0;
   Array1d< Real > energies;
   for( int errorIter = 0; errorIter < 10; ++errorIter )
   {
     integration::QMCGrid< Real, 3 > r1Grid( r1GridSize );
     integration::QMCGrid< Real, 3 > r3Grid( r1GridSize );
     integration::QMCGrid< Real, 2 > r2Grid( r2GridSize );
-    
+
     r1Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
     r3Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
     r2Grid.setBasisFunctions( basisFunctions, hfCalculator.needsGradients() );
 
-    if constexpr ( hfCalculator.needsGradients() )
+    try
     {
-      precomputeTranscorrelated( FjiSame, FjiOppo, VjiSame, VjiOppo, u, r1Grid, r2Grid, r3Grid );
-      energies.emplace_back( hfCalculator.compute( true, {}, coreMatrix, r1Grid, FjiSame, FjiOppo, VjiSame, VjiOppo, basisFunctions ) );
+      if constexpr ( hfCalculator.needsGradients() )
+      {
+        precomputeTranscorrelated( FjiSame, FjiOppo, VjiSame, VjiOppo, u, r1Grid, r2Grid, r3Grid );
+        energies.emplace_back( hfCalculator.compute( overlapMatrix, coreMatrix, r1Grid, FjiSame, FjiOppo, VjiSame, VjiOppo, true ) );
+      }
+      else
+      {
+        precompute( FjiSame, r1Grid, r2Grid );
+        energies.emplace_back( hfCalculator.compute( overlapMatrix, coreMatrix, r1Grid, FjiSame, true ) );
+      }
+
+      convergenceRepeats = 0;
     }
-    else
+    catch( LvArray::dense::Error const & e )
     {
-      precompute( FjiSame, r1Grid, r2Grid );
-      energies.emplace_back( hfCalculator.compute( overlapMatrix, coreMatrix, r1Grid, FjiSame, true ) );
+      LVARRAY_LOG( "Caught a linear algebra exception: " << e.what() );
+      return std::numeric_limits< double >::max();
+    }
+    catch( ConvergenceError const & e )
+    {
+      --errorIter;
+      ++convergenceRepeats;
+
+      if( convergenceRepeats == 3 )
+      {
+        LVARRAY_LOG( "Could not converge for the third time, exiting." );
+        return std::numeric_limits< double >::max();
+      }
+
+      LVARRAY_LOG( "Convergence error" );
     }
   }
 
@@ -406,55 +434,14 @@ double ochiNewHF(
   return mean;
 }
 
-
-
+/**
+ */
+template< typename HF_SOLVER >
 void optimizeOrbitalExponents(
   int const Z,
+  std::vector< SlaterTypeOrbital< double > > & basisFunctions,
   double const hfEnergy,
-  double const energy,
-  int const r1GridSize,
-  int const r2GridSize )
-{
-  CArray< double, 5 > ns { 1, 1, 1, 1, 1 };
-
-  std::mt19937 gen;
-  std::normal_distribution< double > dist( 0.0, 0.1 );
-
-  // CArray< double, 2 > prevAlphas { 2.82975, 1.4425 };
-  // CArray< double, 3 > prevAlphas { 1.22155, 1.49023, 2.97894 };
-  CArray< double, 4 > prevAlphas { 1.32545, 1.44401, 3.10602, 1.50648 };
-
-  double prevEnergy = std::numeric_limits< double >::max();
-  for( int iter = 0; iter < 100; ++iter )
-  {
-    auto curAlphas{ prevAlphas };
-    
-    std::vector< SlaterTypeOrbital< double > > basisFunctions;
-    for( int i = 0; i < prevAlphas.size(); ++i )
-    {
-      curAlphas[ i ] += dist( gen ) / (i + 1);
-      curAlphas[ i ] = std::abs( curAlphas[ i ] );
-      basisFunctions.emplace_back( curAlphas[ i ], ns[ i ], 0, 0 );
-    }
-
-    double const curEnergy = ochiNewHF< RCSHartreeFock< std::complex< double > > >( Z, hfEnergy, energy, basisFunctions, r1GridSize, r2GridSize );
-    
-    if( curEnergy < prevEnergy )
-    {
-      prevEnergy = curEnergy;
-      prevAlphas = curAlphas;
-      LVARRAY_LOG( "Best so far = " << prevAlphas );
-    }
-  }
-
-  LVARRAY_LOG( "Best found = " << prevAlphas );
-}
-
-
-
-void optimizeOrbitalExponents(
-  int const Z,
-  std::vector< SlaterTypeOrbital< double > > & basisFunctions )
+  double const energy )
 {
   /* Starting point */
   gsl_vector * alphas = gsl_vector_alloc( basisFunctions.size() );
@@ -468,27 +455,30 @@ void optimizeOrbitalExponents(
   gsl_vector_set_all( ss, 1.0 );
 
   /* Initialize method and iterate */
-  std::pair< std::vector< SlaterTypeOrbital< double > > &, int > params{ basisFunctions, Z };
+  using ParamType = std::tuple< std::vector< SlaterTypeOrbital< double > > &, int, double, double >;
+  ParamType params{ basisFunctions, Z, hfEnergy, energy };
   gsl_multimin_function minex_func;
-  minex_func.n = 2;
+  minex_func.n = basisFunctions.size();
   minex_func.params = &params;
 
   minex_func.f = [] ( gsl_vector const * x, void * params )
   {
-    auto * paramsT = reinterpret_cast< std::pair< std::vector< SlaterTypeOrbital< double > > &, int > * >( params );
+    auto * paramsP = reinterpret_cast< ParamType * >( params );
     
-    std::vector< SlaterTypeOrbital< double > > & basisFunctions = paramsT->first;
-    int Z = paramsT->second;
+    std::vector< SlaterTypeOrbital< double > > & basisFunctions = std::get< 0 >( *paramsP );
+    int const Z = std::get< 1 >( *paramsP );
+    double const hfEnergy = std::get< 2 >( *paramsP );
+    double const energy = std::get< 3 >( *paramsP );
     
     for( std::size_t i = 0; i < basisFunctions.size(); ++i )
     {
       basisFunctions[ i ].resetOrbitalExponent( gsl_vector_get( x, i ) );
     }
 
-    return ochiNewHF< RCSHartreeFock< std::complex< double > > >( Z, -2.861700, -2.903700, basisFunctions, 1000, 2000 );
+    return ochiNewHF< HF_SOLVER >( Z, hfEnergy, energy, basisFunctions, clo.r1GridSize, clo.r2GridSize );
   };
 
-  gsl_multimin_fminimizer * s = gsl_multimin_fminimizer_alloc( gsl_multimin_fminimizer_nmsimplex2, 2 );
+  gsl_multimin_fminimizer * s = gsl_multimin_fminimizer_alloc( gsl_multimin_fminimizer_nmsimplex2, basisFunctions.size() );
   gsl_multimin_fminimizer_set( s, &minex_func, alphas, ss );
  
   int status;
@@ -504,11 +494,14 @@ void optimizeOrbitalExponents(
     double size = gsl_multimin_fminimizer_size( s );
     status = gsl_multimin_test_size( size, 1e-2 );
 
-    printf ("%5d %10.3e %10.3e f() = %7.3f size = %.3f\n",
-            iter,
-            gsl_vector_get (s->x, 0),
-            gsl_vector_get (s->x, 1),
-            s->fval, size);
+    std::cout << "Best so far: " << std::setprecision(10);
+    for( std::size_t i = 0; i < basisFunctions.size(); ++i )
+    {
+      basisFunctions[ i ].resetOrbitalExponent( gsl_vector_get( s->x, i ) );
+      std::cout << basisFunctions[ i ].alpha << ", ";
+    }
+
+    std::cout << std::endl;
 
     if (status == GSL_SUCCESS)
     {
@@ -531,15 +524,61 @@ void optimizeOrbitalExponents(
   gsl_multimin_fminimizer_free( s );
 }
 
+/**
+ */
+std::vector< SlaterTypeOrbital< double > > getBasisFunctions( int const Z )
+{
+  std::unordered_map< int, std::vector< SlaterTypeOrbital< double > > > const basisFunctions
+  {
+    { 2, { { 2.822085428, 1, 0, 0 },
+           { 1.440559397, 1, 0, 0 } } },
+    { 3, { { 4.204771337, 1, 0, 0 },
+           { 2.202175264, 1, 0, 0 },
+           { 2.257048049, 2, 0, 0 },
+           { 0.669288846, 2, 0, 0 } } },
+    { 4, { { 5.328935439, 1, 0, 0 },
+           { 2.786911325, 1, 0, 0 },
+           { 2.638473675, 2, 0, 0 },
+           { 0.927608881, 2, 0, 0 },
+           { 1.242131697, 3, 0, 0 },
+           { 1.862040748, 3, 0, 0 } } },
+    { 5, { { 5.085032820, 1, 0, +0 },
+           { 2.878504560, 1, 0, +0 },
+           { 1.789508005, 2, 0, +0 },
+           { 1.101417655, 2, 0, +0 },
+           { 2.385883417, 2, 1, -1 },
+           { 1.061275537, 2, 1, -1 },
+           { 2.385883417, 2, 1, +0 },
+           { 1.061275537, 2, 1, +0 },
+           { 2.385883417, 2, 1, +1 },
+           { 1.061275537, 2, 1, +1 } } },
+    { 6, { { 6.739069556, 1, 0, 0 },
+           { 2.631220383, 1, 0, 0 },
+           { 3.898095485, 1, 0, 0 },
+           { 2.008361494, 2, 0, 0 },
+           { 1.242563282, 2, 0, 0 },
+           { 2.458624422, 2, 0, 0 },
+           { 2.796921480, 2, 1, -1 },
+           { 1.179855443, 2, 1, -1 },
+           { 2.407663971, 2, 1, -1 },
+           { 2.796921480, 2, 1, +0 },
+           { 1.179855443, 2, 1, +0 },
+           { 2.407663971, 2, 1, +0 },
+           { 2.796921480, 2, 1, +1 },
+           { 1.179855443, 2, 1, +1 },
+           { 2.407663971, 2, 1, +1 } } }
+  };
+
+  return basisFunctions.at( Z );
+}
 
 
-
-// Taken from https://aip.scitation.org/doi/pdf/10.1063/1.458750
-std::vector< std::tuple< int, double, double, double > > atoms {
-    { 2, 1.355,  -2.861700, -2.903700 }
-  // , { 3,  -7.432700, -7.478100 }
-  // , { 4,  -14.57300, -14.66730 }
-  // , { 5, 2.400,  -24.52910, -24.65390 }
+// Energies taken from https://aip.scitation.org/doi/pdf/10.1063/1.458750
+std::vector< std::tuple< int, double, double > > atoms {
+  //   { 2, -2.861700, -2.903700 }
+  // , { 3, -7.432700, -7.478100 }
+  { 4,  -14.57300, -14.66730 }
+  // , { 5, -24.52910, -24.65390 }
   // , { 6,  -37.68860, -37.84510 }
   // , { 7,  -54.40090, -54.58950 }
   // , { 8,  -74.80940, -75.06730 }
@@ -548,48 +587,62 @@ std::vector< std::tuple< int, double, double, double > > atoms {
 };
 
 
+TEST( NewHartreeFock, OptimizeOrbitalExponents )
+{
+  TCSCF_MARK_SCOPE( "New restricted closed shell" );
+
+  for( auto const & [Z, hfEnergy, energy] : atoms )
+  {
+    std::vector< SlaterTypeOrbital< double > > basisFunctions = getBasisFunctions( Z );
+
+    optimizeOrbitalExponents< UOSHartreeFock< std::complex< double > > >( Z, basisFunctions, hfEnergy, energy );
+
+    std::cout << std::setprecision( 10 );
+    for( auto const & basis : basisFunctions )
+    {
+      LVARRAY_LOG( "{ " << basis.alpha << ", " << basis.n << ", " << basis.l << ", " << basis.m << " }"  );
+    }
+  }
+}
+
+
 TEST( NewHartreeFock, RestrictedClosedShell )
 {
   TCSCF_MARK_SCOPE( "New restricted closed shell" );
 
-  for( auto const & [Z, alpha, hfEnergy, energy] : atoms )
+  for( auto const & [Z, hfEnergy, energy] : atoms )
   {
     if( Z % 2 != 0 )
     {
       continue;
     }
 
-    std::vector< SlaterTypeOrbital< double > > basisFunctions {
-      { 2.96099, 1, 0, 0 },
-      { 1.45224, 1, 0, 0 }
-    };
-
-    optimizeOrbitalExponents( Z, basisFunctions );
-
-    // optimizeOrbitalExponents( Z, hfEnergy, energy, clo.r1GridSize, clo.r2GridSize );
-    // ochiNewHF< RCSHartreeFock< std::complex< double > > >( Z, hfEnergy, energy, clo.nMax, clo.lMax, clo.initialAlpha, clo.r1GridSize, clo.r2GridSize );
+    std::vector< SlaterTypeOrbital< double > > basisFunctions = getBasisFunctions( Z );
+    ochiNewHF< RCSHartreeFock< std::complex< double > > >( Z, hfEnergy, energy, basisFunctions, clo.r1GridSize, clo.r2GridSize );
   }
 }
 
-// TEST( NewHartreeFock, UnrestrictedOpenShell )
-// {
-//   TCSCF_MARK_SCOPE( "New unrestricted open shell" );
+TEST( NewHartreeFock, UnrestrictedOpenShell )
+{
+  TCSCF_MARK_SCOPE( "New unrestricted open shell" );
 
-//   for( auto const & [Z, alpha, hfEnergy, energy] : atoms )
-//   {
-//     ochiNewHF< UOSHartreeFock< std::complex< double > > >( Z, hfEnergy, energy, clo.nMax, clo.lMax, alpha, clo.r1GridSize, clo.r2GridSize );
-//   }
-// }
+  for( auto const & [Z, hfEnergy, energy] : atoms )
+  {
+    std::vector< SlaterTypeOrbital< double > > basisFunctions = getBasisFunctions( Z );
+    ochiNewHF< UOSHartreeFock< std::complex< double > > >( Z, hfEnergy, energy, basisFunctions, clo.r1GridSize, clo.r2GridSize );
+  }
+}
 
-// TEST( NewHartreeFock, Transcorrelated )
-// {
-//   TCSCF_MARK_SCOPE( "New transcorrelated" );
+TEST( NewHartreeFock, Transcorrelated )
+{
+  TCSCF_MARK_SCOPE( "New unrestricted open shell" );
 
-//   for( auto const & [Z, alpha, hfEnergy, energy] : atoms )
-//   {
-//     ochiNewHF< TCHartreeFock< std::complex< double > > >( Z, hfEnergy, energy, clo.nMax, clo.lMax, alpha, clo.r1GridSize, clo.r2GridSize );
-//   }
-// }
+  for( auto const & [Z, hfEnergy, energy] : atoms )
+  {
+    std::vector< SlaterTypeOrbital< double > > basisFunctions = getBasisFunctions( Z );
+    ochiNewHF< TCHartreeFock< std::complex< double > > >( Z, hfEnergy, energy, basisFunctions, clo.r1GridSize, clo.r2GridSize );
+  }
+}
 
 } // namespace tcscf::testing
 

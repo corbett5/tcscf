@@ -5,24 +5,18 @@
 
 #include "dense/common.hpp"
 
-
-
-
-
-#include "OchiBasis.hpp"
-#include "HydrogenLikeBasis.hpp"
-
-
-
-
-
-
-
 namespace tcscf
 {
 
-template< typename REAL >
-using BasisFunctionType = OchiBasisFunction< REAL >;
+/**
+ */
+struct ConvergenceError : public std::runtime_error
+{
+  template< typename ... ARGS >
+  ConvergenceError( ARGS && ... args ):
+    std::runtime_error( std::forward< ARGS >( args ) ... )
+  {}
+};
 
 /**
  */
@@ -140,6 +134,55 @@ Array3d< REAL > computeF(
  * 
  */
 template< typename REAL >
+Array3d< std::complex< REAL > > computeF(
+  integration::QMCGrid< REAL, 3 > const & r1Grid,
+  integration::QMCGrid< REAL, 3 > const & r2Grid,
+  ArrayView2d< REAL const > const & scalarFunction )
+{
+  TCSCF_MARK_FUNCTION;
+
+  using PolicyType = ParallelHost;
+  using Real = REAL;
+  using Complex = std::complex< Real >;
+
+  IndexType const nBasis = r1Grid.nBasis();
+  IndexType const nGridR1 = r1Grid.nGrid();
+  IndexType const nGridR2 = r2Grid.nGrid();
+
+  LVARRAY_ERROR_IF_NE( r1Grid.nBasis(), r2Grid.nBasis() );
+  LVARRAY_ERROR_IF_NE( scalarFunction.size( 0 ), nGridR1 );
+  LVARRAY_ERROR_IF_NE( scalarFunction.size( 1 ), nGridR2 );
+
+  ArrayView2d< Complex const > const r2BasisValues = r2Grid.basisValues.toViewConst();
+  Array3d< Complex > F( nGridR1, nBasis, nBasis );
+
+  forAll< DefaultPolicy< PolicyType > >( nGridR1,
+    [=, F=F.toView()] ( IndexType const r1Idx )
+    {
+      for( IndexType j = 0; j < nBasis; ++j )
+      {
+        for( IndexType i = j; i < nBasis; ++i )
+        {
+          Complex answer {};
+          for( IndexType r2Idx = 0; r2Idx < nGridR2; ++r2Idx )
+          {
+            answer += conj( r2BasisValues( r2Idx, j ) ) * scalarFunction( r1Idx, r2Idx ) * r2BasisValues( r2Idx, i );
+          }
+
+          F( r1Idx, j, i ) = answer;
+          F( r1Idx, i, j ) = conj( answer );
+        }
+      }
+    }
+  );
+
+  return F;
+}
+
+/**
+ * 
+ */
+template< typename REAL >
 Array3d< Cartesian< std::complex< REAL > > > computeV(
   integration::QMCGrid< REAL, 3 > const & r1Grid,
   integration::QMCGrid< REAL, 3 > const & r2Grid,
@@ -200,8 +243,7 @@ struct RCSHartreeFock
     density( 1, numBasisFunctions, numBasisFunctions ),
     fockOperator( 1, numBasisFunctions, numBasisFunctions ),
     eigenvalues( numBasisFunctions ),
-    eigenvectors( 1, numBasisFunctions, numBasisFunctions ),
-    _support( 2 * numBasisFunctions )
+    eigenvectors( 1, numBasisFunctions, numBasisFunctions )
   {
     LVARRAY_ERROR_IF_NE( numElectrons % 2, 0 );
   }
@@ -248,7 +290,6 @@ struct RCSHartreeFock
 private:
   int _iter = 0;
   LvArray::dense::ArrayWorkspace< T, LvArray::ChaiBuffer > _workspace;
-  Array1d< int > _support;
 };
 
 /**
@@ -266,8 +307,7 @@ struct UOSHartreeFock
     density( 2, numBasisFunctions, numBasisFunctions ),
     fockOperator( 2, numBasisFunctions, numBasisFunctions ),
     eigenvalues( 2, numBasisFunctions ),
-    eigenvectors( 2, numBasisFunctions, std::max( numSpinUp, numSpinDown ) ),
-    _support( 2 * std::max( numSpinUp, numSpinDown ) )
+    eigenvectors( 2, numBasisFunctions, numBasisFunctions )
   {}
   
   /**
@@ -283,12 +323,11 @@ struct UOSHartreeFock
   /**
    */
   Real compute(
-    bool const orthogonal,
-    ArrayView2d< T const > const & overlap,
+    ArrayView2d< T const, 0 > const & overlap,
     ArrayView2d< Real const > const & oneElectronTerms,
     integration::QMCGrid< Real, 3 > const & r1Grid,
     ArrayView3d< Real const > const & Fji,
-    std::vector< BasisFunctionType< Real > > const & basisFunctions );
+    bool const respectOneElectronSymmetry );
 
   /**
    */
@@ -300,14 +339,13 @@ struct UOSHartreeFock
   CArray< int, 2 > const nElectrons;
   int const basisSize;
   Array3d< T > const density;
-  Array3d< T, RAJA::PERM_IKJ > const fockOperator;
+  Array3d< T, RAJA::PERM_IKJ > fockOperator;
   Array2d< Real > const eigenvalues;
-  Array3d< T, RAJA::PERM_IKJ > const eigenvectors;
+  Array3d< T, RAJA::PERM_IKJ > eigenvectors;
 
 private:
   int _iter = 0;
   LvArray::dense::ArrayWorkspace< T, LvArray::ChaiBuffer > _workspace;
-  Array1d< int > _support;
 };
 
 /**
@@ -346,15 +384,14 @@ struct TCHartreeFock
   /**
    */
   Real compute(
-    bool const orthogonal,
-    ArrayView2d< T const > const & overlap,
+    ArrayView2d< T const, 0 > const & overlap,
     ArrayView2d< Real const > const & oneElectronTerms,
     integration::QMCGrid< Real, 3 > const & r1Grid,
     ArrayView3d< Real const > const & FjiSame,
     ArrayView3d< Real const > const & FjiOppo,
     ArrayView3d< Cartesian< T > const > const & VjiSame,
     ArrayView3d< Cartesian< T > const > const & VjiOppo,
-    std::vector< BasisFunctionType< Real > > const & basisFunctions );
+    bool const respectOneElectronSymmetry );
 
   /**
    */

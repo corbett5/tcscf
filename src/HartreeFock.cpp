@@ -972,6 +972,7 @@ RealType< T > UOSHartreeFock< T >::compute(
       return newEnergy;
     }
 
+    LVARRAY_LOG_VAR( newEnergy );
     energy = newEnergy;
 
     {

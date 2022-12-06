@@ -5,6 +5,8 @@
 #include "integration/quadrature.hpp"
 #include "integration/changeOfVariables.hpp"
 
+#include <filesystem>
+
 namespace tcscf
 {
 
@@ -178,5 +180,13 @@ REAL coreMatrixElement(
 {
   return coreMatrixElement( Z, b1, b2 );
 }
+
+/**
+ */
+void loadSTO(
+  std::path const & directory,
+  std::string const & basisSet,
+  std::string const & element,
+  int const maxL = std::numeric_limits< int >::max() );
 
 } // namespace tcscf

@@ -66,6 +66,7 @@ set( tcscf_sources
      caliperInterface.cpp
      HartreeFock.cpp
      setup.cpp
+     SlaterTypeOrbital.cpp
 
      integration/Lebedev.cpp
 )

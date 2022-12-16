@@ -13,7 +13,7 @@ struct Ochi
 
   Real operator()( Real const r1, Real const r2, Real const r12, bool const sameSpin ) const
   {
-    Real const r12T = r12 / (r12 + a);
+    Real const r12T = r12 / (r12 + a12);
     Real const r1T = r1 / (r1 + a);
     Real const r2T = r2 / (r2 + a);
   

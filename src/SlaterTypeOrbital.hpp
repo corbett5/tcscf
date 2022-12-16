@@ -5,7 +5,6 @@
 #include "integration/quadrature.hpp"
 #include "integration/changeOfVariables.hpp"
 
-#include <filesystem>
 
 namespace tcscf
 {
@@ -123,7 +122,7 @@ namespace internal
 /**
  * 
  */
-double overlapNonNormalized( int const sumOfN, double const sumOfAlpha )
+inline double overlapNonNormalized( int const sumOfN, double const sumOfAlpha )
 {
   return std::tgamma( sumOfN + 1 ) / std::pow( sumOfAlpha, sumOfN + 1 );
 }
@@ -183,8 +182,8 @@ REAL coreMatrixElement(
 
 /**
  */
-void loadSTO(
-  std::path const & directory,
+std::vector< SlaterTypeOrbital< double > > loadSTO(
+  std::string const & directory,
   std::string const & basisSet,
   std::string const & element,
   int const maxL = std::numeric_limits< int >::max() );

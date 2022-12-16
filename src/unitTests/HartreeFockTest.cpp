@@ -321,12 +321,12 @@ void precomputeTranscorrelated(
 /**
  * 
  */
-template< typename HF_CALCULATOR >
+template< typename HF_CALCULATOR, typename BASIS_FUNC >
 double ochiNewHF(
   int const Z,
   double const hfEnergy,
   double const energy,
-  std::vector< SlaterTypeOrbital< double > > const & basisFunctions,
+  std::vector< BASIS_FUNC > const & basisFunctions,
   int const r1GridSize,
   int const r2GridSize )
 {
@@ -335,9 +335,6 @@ double ochiNewHF(
 
   int const nSpinUp = Z / 2;
   int const nSpinDown = Z - nSpinUp;
-
-  // std::vector< OchiBasisFunction< double > > basisFunctions;
-  // createBasisFunctions( 9, 0, 1.355, basisFunctions );
 
   int const nBasis = basisFunctions.size();
 
@@ -351,14 +348,14 @@ double ochiNewHF(
   Array3d< Cartesian< Complex > > VjiSame;
   Array3d< Cartesian< Complex > > VjiOppo;
   
-  Real const a = 1.5;
+  Real const a = 2.32239613;
   Real const a12 = a;
   Array2d< int > S( 1, 3 );
   S( 0, 0 ) = 1;
 
   Array2d< Real > c( 1, 2 );
-  c( 0, false ) = a12 / 2;
-  c( 0, true ) = a12 / 4;
+  c( 0, false ) = -a12 / 2;
+  c( 0, true ) = -a12 / 4;
 
   jastrowFunctions::Ochi< Real > const u { a, a12, c, S };
   
@@ -368,14 +365,22 @@ double ochiNewHF(
     integration::QuadratureGrid< Real > const coreGrid = integration::createGrid(
       integration::ChebyshevGauss< Real >( 1000 ),
       integration::changeOfVariables::TreutlerAhlrichsM4< Real >( 1, 0.9 ) );
+    
+    Real maxOffDiagOverlap = 0;
     for( int i = 0; i < nBasis; ++i )
     {
       for( int j = 0; j < nBasis; ++j )
       {
         overlapMatrix( i, j ) = overlap( basisFunctions[ i ], basisFunctions[ j ] );
+        if( i != j )
+        {
+          maxOffDiagOverlap = std::max( maxOffDiagOverlap, overlapMatrix( i, j ).real() );
+        }
         coreMatrix( i, j ) = coreMatrixElement( coreGrid, Z, basisFunctions[ i ], basisFunctions[ j ] );
       }
     }
+
+    LVARRAY_LOG_VAR( maxOffDiagOverlap );
   }
 
   int convergenceRepeats = 0;
@@ -418,11 +423,18 @@ double ochiNewHF(
       if( convergenceRepeats == 3 )
       {
         LVARRAY_LOG( "Could not converge for the third time, exiting." );
-        return std::numeric_limits< double >::max();
+        throw e;
       }
 
       LVARRAY_LOG( "Convergence error" );
     }
+  }
+
+  for( int i = 0; i < nBasis; ++i )
+  {
+    Complex const c0 = hfCalculator.occupiedOrbitals[ 0 ]( 0, 0 ) * basisFunctions[ 0 ].normalization;
+    Complex const ci = hfCalculator.occupiedOrbitals[ 0 ]( i, 0 ) * basisFunctions[ i ].normalization;
+    LVARRAY_LOG( ci / c0 );
   }
 
   auto const [mean, standardDev] = meanAndStd( energies.toViewConst() );
@@ -524,142 +536,52 @@ void optimizeOrbitalExponents(
   gsl_multimin_fminimizer_free( s );
 }
 
-
-std::vector< SlaterTypeOrbital< double > > getZORAQZ4P( int const Z )
-{
-  std::unordered_map< int, std::vector< SlaterTypeOrbital< double > > > const basisFunctions
-  {
-    { 2, {
-      { 7.000, 1, 0, 0 },
-      { 3.200, 1, 0, 0 },
-      { 1.700, 1, 0, 0 },
-      { 1.160, 1, 0, 0 },
-      { 0.600, 1, 0, 0 },
-      
-      { 1.500, 1, 1, -1 },
-      { 1.500, 1, 1, +0 },
-      { 1.500, 1, 1, +1 },
-      
-      { 0.750, 1, 1, -1 },
-      { 0.750, 1, 1, +0 },
-      { 0.750, 1, 1, +1 },
-
-      { 2.500, 3, 2, -2 },
-      { 2.500, 3, 2, -1 },
-      { 2.500, 3, 2, +0 },
-      { 2.500, 3, 2, +1 },
-      { 2.500, 3, 2, +2 },
-
-      { 1.250, 3, 2, -2 },
-      { 1.250, 3, 2, -1 },
-      { 1.250, 3, 2, +0 },
-      { 1.250, 3, 2, +1 },
-      { 1.250, 3, 2, +2 },
-    } },
-    { 3, {
-      { 5.200, 1, 0, 0 },
-      { 2.900, 1, 0, 0 },
-      { 2.050, 1, 0, 0 },
-
-      { 2.450, 2, 0, 0 },
-      { 0.900, 2, 0, 0 },
-      { 0.650, 2, 0, 0 },
-      { 0.480, 2, 0, 0 },
-
-      // { 2.400, 1, 1, -1 },
-      // { 2.400, 1, 1, +0 },
-      // { 2.400, 1, 1, +1 },
-
-      // { 1.200, 1, 1, -1 },
-      // { 1.200, 1, 1, +0 },
-      // { 1.200, 1, 1, +1 },
-
-      // { 0.600, 1, 1, -1 },
-      // { 0.600, 1, 1, +0 },
-      // { 0.600, 1, 1, +1 },
-
-      // { 1.800, 3, 2, -2 },
-      // { 1.800, 3, 2, -1 },
-      // { 1.800, 3, 2, +0 },
-      // { 1.800, 3, 2, +1 },
-      // { 1.800, 3, 2, +2 },
-
-      // { 0.900, 3, 2, -2 },
-      // { 0.900, 3, 2, -1 },
-      // { 0.900, 3, 2, +0 },
-      // { 0.900, 3, 2, +1 },
-      // { 0.900, 3, 2, +2 },
-
-      // { 2.400, 4, 3, -3 },
-      // { 2.400, 4, 3, -2 },
-      // { 2.400, 4, 3, -1 },
-      // { 2.400, 4, 3, +0 },
-      // { 2.400, 4, 3, +1 },
-      // { 2.400, 4, 3, +2 },
-      // { 2.400, 4, 3, +3 },
-
-      // { 1.200, 4, 3, -3 },
-      // { 1.200, 4, 3, -2 },
-      // { 1.200, 4, 3, -1 },
-      // { 1.200, 4, 3, +0 },
-      // { 1.200, 4, 3, +1 },
-      // { 1.200, 4, 3, +2 },
-      // { 1.200, 4, 3, +3 },
-    } }
-  };
-
-  return basisFunctions.at( Z );
-}
-
-
-
-
-
-
-
 /**
  */
 std::vector< SlaterTypeOrbital< double > > getBasisFunctions( int const Z )
 {
   std::unordered_map< int, std::vector< SlaterTypeOrbital< double > > > const basisFunctions
   {
-    { 2, { { 2.822085428, 1, 0, 0 },
-           { 1.440559397, 1, 0, 0 } } },
-    { 3, { { 4.204771337, 1, 0, 0 },
-           { 2.202175264, 1, 0, 0 },
-           { 2.257048049, 2, 0, 0 },
-           { 0.669288846, 2, 0, 0 } } },
-    { 4, { { 5.328935439, 1, 0, 0 },
-           { 2.786911325, 1, 0, 0 },
-           { 2.638473675, 2, 0, 0 },
-           { 0.927608881, 2, 0, 0 },
-           { 1.242131697, 3, 0, 0 },
-           { 1.862040748, 3, 0, 0 } } },
-    { 5, { { 5.085032820, 1, 0, +0 },
-           { 2.878504560, 1, 0, +0 },
-           { 1.789508005, 2, 0, +0 },
-           { 1.101417655, 2, 0, +0 },
-           { 2.385883417, 2, 1, -1 },
-           { 1.061275537, 2, 1, -1 },
-           { 2.385883417, 2, 1, +0 },
-           { 1.061275537, 2, 1, +0 },
-           { 2.385883417, 2, 1, +1 },
-           { 1.061275537, 2, 1, +1 } } },
-    { 6, { { 6.739069556, 1, 0, 0 },
-           { 2.631220383, 1, 0, 0 },
-           { 3.898095485, 1, 0, 0 },
-           { 2.008361494, 2, 0, 0 },
-           { 1.242563282, 2, 0, 0 },
-           { 2.458624422, 2, 0, 0 },
-           { 2.796921480, 2, 1, -1 },
-           { 1.179855443, 2, 1, -1 },
-           { 2.407663971, 2, 1, -1 },
-           { 2.796921480, 2, 1, +0 },
-           { 1.179855443, 2, 1, +0 },
-           { 2.407663971, 2, 1, +0 },
-           { 2.796921480, 2, 1, +1 },
-           { 1.179855443, 2, 1, +1 },
-           { 2.407663971, 2, 1, +1 } } }
+    { 2, { { 1.88804342, 1, 0, 0 },
+           { 1.88804342, 2, 0, 0 },
+           { 1.88804342, 3, 0, 0 } } },
+    // { 2, { { 2.822085428, 1, 0, 0 },
+    //        { 1.440559397, 1, 0, 0 } } },
+    // { 3, { { 4.204771337, 1, 0, 0 },
+    //        { 2.202175264, 1, 0, 0 },
+    //        { 2.257048049, 2, 0, 0 },
+    //        { 0.669288846, 2, 0, 0 } } },
+    // { 4, { { 5.328935439, 1, 0, 0 },
+    //        { 2.786911325, 1, 0, 0 },
+    //        { 2.638473675, 2, 0, 0 },
+    //        { 0.927608881, 2, 0, 0 },
+    //        { 1.5, 2, 0, 0 },
+    //     } },
+    // { 5, { { 5.085032820, 1, 0, +0 },
+    //        { 2.878504560, 1, 0, +0 },
+    //        { 1.789508005, 2, 0, +0 },
+    //        { 1.101417655, 2, 0, +0 },
+    //        { 2.385883417, 2, 1, -1 },
+    //        { 1.061275537, 2, 1, -1 },
+    //        { 2.385883417, 2, 1, +0 },
+    //        { 1.061275537, 2, 1, +0 },
+    //        { 2.385883417, 2, 1, +1 },
+    //        { 1.061275537, 2, 1, +1 } } },
+    // { 6, { { 6.739069556, 1, 0, 0 },
+    //        { 2.631220383, 1, 0, 0 },
+    //        { 3.898095485, 1, 0, 0 },
+    //        { 2.008361494, 2, 0, 0 },
+    //        { 1.242563282, 2, 0, 0 },
+    //        { 2.458624422, 2, 0, 0 },
+    //        { 2.796921480, 2, 1, -1 },
+    //        { 1.179855443, 2, 1, -1 },
+    //        { 2.407663971, 2, 1, -1 },
+    //        { 2.796921480, 2, 1, +0 },
+    //        { 1.179855443, 2, 1, +0 },
+    //        { 2.407663971, 2, 1, +0 },
+    //        { 2.796921480, 2, 1, +1 },
+    //        { 1.179855443, 2, 1, +1 },
+    //        { 2.407663971, 2, 1, +1 } } }
   };
 
   return basisFunctions.at( Z );
@@ -667,10 +589,10 @@ std::vector< SlaterTypeOrbital< double > > getBasisFunctions( int const Z )
 
 
 // Energies taken from https://aip.scitation.org/doi/pdf/10.1063/1.458750
-std::vector< std::tuple< int, double, double > > atoms {
-    { 2, -2.861700, -2.903700 }
-  , { 3, -7.432700, -7.478100 }
-  // { 4,  -14.57300, -14.66730 }
+std::vector< std::tuple< std::string, int, double, double > > atoms {
+    { "He", 2, -2.861700, -2.903700 }
+  // , { "Li", 3, -7.432700, -7.478100 }
+  // , { "Be", 4,  -14.57300, -14.66730 }
   // , { 5, -24.52910, -24.65390 }
   // , { 6,  -37.68860, -37.84510 }
   // , { 7,  -54.40090, -54.58950 }
@@ -715,27 +637,43 @@ std::vector< std::tuple< int, double, double > > atoms {
 //   }
 // }
 
-TEST( NewHartreeFock, UnrestrictedOpenShell )
-{
-  TCSCF_MARK_SCOPE( "New unrestricted open shell" );
+// TEST( NewHartreeFock, UnrestrictedOpenShell )
+// {
+//   TCSCF_MARK_SCOPE( "New unrestricted open shell" );
 
-  for( auto const & [Z, hfEnergy, energy] : atoms )
-  {
-    std::vector< SlaterTypeOrbital< double > > basisFunctions = getZORAQZ4P( Z );
-    ochiNewHF< UOSHartreeFock< std::complex< double > > >( Z, hfEnergy, energy, basisFunctions, clo.r1GridSize, clo.r2GridSize );
-  }
-}
+//   for( auto const & [elem, Z, hfEnergy, energy] : atoms )
+//   {
+//     // std::vector< SlaterTypeOrbital< double > > basisFunctions = loadSTO( "../basisFunctions", "TZ3P", elem );
+//     std::vector< SlaterTypeOrbital< double > > basisFunctions = getBasisFunctions( Z );
+//     ochiNewHF< UOSHartreeFock< std::complex< double > > >( Z, hfEnergy, energy, basisFunctions, clo.r1GridSize, clo.r2GridSize );
+//   }
+// }
 
 TEST( NewHartreeFock, Transcorrelated )
 {
   TCSCF_MARK_SCOPE( "New unrestricted open shell" );
 
-  for( auto const & [Z, hfEnergy, energy] : atoms )
+  for( auto const & [elem, Z, hfEnergy, energy] : atoms )
   {
-    std::vector< SlaterTypeOrbital< double > > basisFunctions = getZORAQZ4P( Z );
+    // if( Z != 4 )
+    // {
+    //   continue;
+    // }
+
+    // std::vector< SlaterTypeOrbital< double > > basisFunctions = loadSTO( "../basisFunctions", "TZ3P", elem );
+    std::vector< SlaterTypeOrbital< double > > basisFunctions = getBasisFunctions( Z );
     ochiNewHF< TCHartreeFock< std::complex< double > > >( Z, hfEnergy, energy, basisFunctions, clo.r1GridSize, clo.r2GridSize );
   }
 }
+
+// TEST( loadFile, foo )
+// {
+//   auto basisFuncs = loadSTO( "../basisFunctions", "QZ6P", "C" );
+//   for( auto const & func : basisFuncs )
+//   {
+//     LVARRAY_LOG( func.n << ", " << func.l << ", " << func.m << ", " << func.alpha );
+//   }
+// }
 
 } // namespace tcscf::testing
 

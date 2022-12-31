@@ -90,19 +90,6 @@ macro(find_and_register)
 endmacro(find_and_register)
 
 ################################
-# Adiak
-################################
-message( STATUS "Using Adiak from ${ADIAK_DIR}" )
-
-find_package( adiak REQUIRED
-              PATHS ${ADIAK_DIR}
-              NO_DEFAULT_PATH )
-
-set_property( TARGET adiak
-              APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES
-              ${adiak_INCLUDE_DIRS} )
-
-################################
 # GSL
 ################################
 message( STATUS "Using GSL from ${GSL_DIR}" )
@@ -112,6 +99,17 @@ find_and_register( NAME gsl
                    LIBRARY_DIRECTORIES ${GSL_DIR}/lib
                    HEADER gsl/gsl_math.h
                    LIBRARIES gsl )
+
+################################
+# BLAS and LAPACK
+################################
+if( NOT DEFINED BLAS_LIBRARIES )
+    find_package( BLAS REQUIRED )
+endif()
+
+if( NOT DEFINED LAPACK_LIBRARIES )
+    find_package( LAPACK REQUIRED )
+endif()
 
 ################################
 # RAJA, CHAI, Umpire and Caliper

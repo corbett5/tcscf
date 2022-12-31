@@ -448,93 +448,93 @@ double ochiNewHF(
 
 /**
  */
-template< typename HF_SOLVER >
-void optimizeOrbitalExponents(
-  int const Z,
-  std::vector< SlaterTypeOrbital< double > > & basisFunctions,
-  double const hfEnergy,
-  double const energy )
-{
-  /* Starting point */
-  gsl_vector * alphas = gsl_vector_alloc( basisFunctions.size() );
-  for( std::size_t i = 0; i < basisFunctions.size(); ++i )
-  {
-    gsl_vector_set( alphas, i, basisFunctions[ i ].alpha );
-  }
+// template< typename HF_SOLVER >
+// void optimizeOrbitalExponents(
+//   int const Z,
+//   std::vector< SlaterTypeOrbital< double > > & basisFunctions,
+//   double const hfEnergy,
+//   double const energy )
+// {
+//   /* Starting point */
+//   gsl_vector * alphas = gsl_vector_alloc( basisFunctions.size() );
+//   for( std::size_t i = 0; i < basisFunctions.size(); ++i )
+//   {
+//     gsl_vector_set( alphas, i, basisFunctions[ i ].alpha );
+//   }
 
-  /* Set initial step sizes to 1 */
-  gsl_vector * ss = gsl_vector_alloc( basisFunctions.size() );
-  gsl_vector_set_all( ss, 1.0 );
+//   /* Set initial step sizes to 1 */
+//   gsl_vector * ss = gsl_vector_alloc( basisFunctions.size() );
+//   gsl_vector_set_all( ss, 1.0 );
 
-  /* Initialize method and iterate */
-  using ParamType = std::tuple< std::vector< SlaterTypeOrbital< double > > &, int, double, double >;
-  ParamType params{ basisFunctions, Z, hfEnergy, energy };
-  gsl_multimin_function minex_func;
-  minex_func.n = basisFunctions.size();
-  minex_func.params = &params;
+//   /* Initialize method and iterate */
+//   using ParamType = std::tuple< std::vector< SlaterTypeOrbital< double > > &, int, double, double >;
+//   ParamType params{ basisFunctions, Z, hfEnergy, energy };
+//   gsl_multimin_function minex_func;
+//   minex_func.n = basisFunctions.size();
+//   minex_func.params = &params;
 
-  minex_func.f = [] ( gsl_vector const * x, void * params )
-  {
-    auto * paramsP = reinterpret_cast< ParamType * >( params );
+//   minex_func.f = [] ( gsl_vector const * x, void * paramsV )
+//   {
+//     auto * paramsP = reinterpret_cast< ParamType * >( paramsV );
     
-    std::vector< SlaterTypeOrbital< double > > & basisFunctions = std::get< 0 >( *paramsP );
-    int const Z = std::get< 1 >( *paramsP );
-    double const hfEnergy = std::get< 2 >( *paramsP );
-    double const energy = std::get< 3 >( *paramsP );
+//     std::vector< SlaterTypeOrbital< double > > & basisFunctions = std::get< 0 >( *paramsP );
+//     int const Z = std::get< 1 >( *paramsP );
+//     double const hfEnergy = std::get< 2 >( *paramsP );
+//     double const energy = std::get< 3 >( *paramsP );
     
-    for( std::size_t i = 0; i < basisFunctions.size(); ++i )
-    {
-      basisFunctions[ i ].resetOrbitalExponent( gsl_vector_get( x, i ) );
-    }
+//     for( std::size_t i = 0; i < basisFunctions.size(); ++i )
+//     {
+//       basisFunctions[ i ].resetOrbitalExponent( gsl_vector_get( x, i ) );
+//     }
 
-    return ochiNewHF< HF_SOLVER >( Z, hfEnergy, energy, basisFunctions, clo.r1GridSize, clo.r2GridSize );
-  };
+//     return ochiNewHF< HF_SOLVER >( Z, hfEnergy, energy, basisFunctions, clo.r1GridSize, clo.r2GridSize );
+//   };
 
-  gsl_multimin_fminimizer * s = gsl_multimin_fminimizer_alloc( gsl_multimin_fminimizer_nmsimplex2, basisFunctions.size() );
-  gsl_multimin_fminimizer_set( s, &minex_func, alphas, ss );
+//   gsl_multimin_fminimizer * s = gsl_multimin_fminimizer_alloc( gsl_multimin_fminimizer_nmsimplex2, basisFunctions.size() );
+//   gsl_multimin_fminimizer_set( s, &minex_func, alphas, ss );
  
-  int status;
-  for( int iter = 0; iter < 100; ++iter )
-  {
-    status = gsl_multimin_fminimizer_iterate( s );
+//   int status;
+//   for( int iter = 0; iter < 100; ++iter )
+//   {
+//     status = gsl_multimin_fminimizer_iterate( s );
 
-    if( status )
-    {
-      break;
-    }
+//     if( status )
+//     {
+//       break;
+//     }
 
-    double size = gsl_multimin_fminimizer_size( s );
-    status = gsl_multimin_test_size( size, 1e-2 );
+//     double size = gsl_multimin_fminimizer_size( s );
+//     status = gsl_multimin_test_size( size, 1e-2 );
 
-    std::cout << "Best so far: " << std::setprecision(10);
-    for( std::size_t i = 0; i < basisFunctions.size(); ++i )
-    {
-      basisFunctions[ i ].resetOrbitalExponent( gsl_vector_get( s->x, i ) );
-      std::cout << basisFunctions[ i ].alpha << ", ";
-    }
+//     std::cout << "Best so far: " << std::setprecision(10);
+//     for( std::size_t i = 0; i < basisFunctions.size(); ++i )
+//     {
+//       basisFunctions[ i ].resetOrbitalExponent( gsl_vector_get( s->x, i ) );
+//       std::cout << basisFunctions[ i ].alpha << ", ";
+//     }
 
-    std::cout << std::endl;
+//     std::cout << std::endl;
 
-    if (status == GSL_SUCCESS)
-    {
-      printf ("converged to minimum\n");
-    }
-    if( status != GSL_CONTINUE )
-    {
-      break;
-    }
-  }
+//     if (status == GSL_SUCCESS)
+//     {
+//       printf ("converged to minimum\n");
+//     }
+//     if( status != GSL_CONTINUE )
+//     {
+//       break;
+//     }
+//   }
 
-  for( std::size_t i = 0; i < basisFunctions.size(); ++i )
-  {
-    basisFunctions[ i ].resetOrbitalExponent( gsl_vector_get( s->x, i ) );
-    LVARRAY_LOG( basisFunctions[ i ].alpha );
-  }
+//   for( std::size_t i = 0; i < basisFunctions.size(); ++i )
+//   {
+//     basisFunctions[ i ].resetOrbitalExponent( gsl_vector_get( s->x, i ) );
+//     LVARRAY_LOG( basisFunctions[ i ].alpha );
+//   }
 
-  gsl_vector_free( alphas );
-  gsl_vector_free( ss );
-  gsl_multimin_fminimizer_free( s );
-}
+//   gsl_vector_free( alphas );
+//   gsl_vector_free( ss );
+//   gsl_multimin_fminimizer_free( s );
+// }
 
 /**
  */

@@ -68,8 +68,12 @@ struct Arg : public option::Arg
   static option::ArgStatus floatingPoint( const option::Option & option, bool )
   {
     char * endptr = nullptr;
-    if((option.arg != nullptr) && strtod( option.arg, &endptr )) {}
-    if((endptr != option.arg) && (*endptr == 0))
+    if( option.arg != nullptr )
+    {
+      strtod( option.arg, &endptr );
+    }
+
+    if((endptr != option.arg) && endptr && (*endptr == 0))
     {
       return option::ARG_OK;
     }

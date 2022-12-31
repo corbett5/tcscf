@@ -72,6 +72,8 @@ class Tcscf(CMakePackage, CudaPackage):
 
     depends_on('caliper@2.7.0 +adiak ~mpi ~libunwind ~libdw ~libpfm ~gotcha ~sampler build_type=Release')
 
+    depends_on('qmcpack ~mpi')
+
     with when('+cuda'):
         for sm_ in CudaPackage.cuda_arch_values:
             depends_on('raja +cuda cuda_arch={0}'.format(sm_), when='cuda_arch={0}'.format(sm_))
@@ -248,6 +250,7 @@ class Tcscf(CMakePackage, CudaPackage):
             cfg.write('# System Math Libraries\n')
             cfg.write('#{0}\n\n'.format('-' * 80))
 
+            cfg.write(cmake_cache_option('ENABLE_LAPACK', True))
             cfg.write(cmake_cache_list('BLAS_LIBRARIES', spec['blas'].libs))
             cfg.write(cmake_cache_list('LAPACK_LIBRARIES', spec['lapack'].libs))
 
@@ -310,6 +313,13 @@ class Tcscf(CMakePackage, CudaPackage):
 
             cfg.write(cmake_cache_option("ENABLE_GSL", True))
             cfg.write(cmake_cache_entry("GSL_DIR", spec['gsl'].prefix))
+
+            cfg.write("#{0}\n".format("-" * 80))
+            cfg.write("# QMCPACK\n")
+            cfg.write("#{0}\n\n".format("-" * 80))
+
+            cfg.write(cmake_cache_option("ENABLE_QMCPACK", True))
+            cfg.write(cmake_cache_entry("QMCPACK_DIR", spec['qmcpack'].prefix))
 
     def cmake_args(self):
         spec = self.spec
